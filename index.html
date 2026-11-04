@@ -1,0 +1,139 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<title>MiCar 遥控 · WebBLE</title>
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+<meta name="theme-color" content="#0f1115">
+<meta name="description" content="基于 Web Bluetooth 的小米吉姆尼(Jimny / MiCar)网页遥控，还原方向键/摇杆/重力感应/灯光/高低速。">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="stylesheet" href="css/styles.css">
+</head>
+<body>
+<div class="app">
+
+  <!-- 顶部状态栏 -->
+  <header class="topbar">
+    <div class="brand">
+      <span class="logo">🚗</span>
+      <div class="brand-text">
+        <h1>MiCar 遥控</h1>
+        <p id="deviceName" class="sub">WebBLE · 小米吉姆尼</p>
+      </div>
+    </div>
+    <div class="status">
+      <span id="statusPill" class="pill pill-off">未连接</span>
+      <span id="battery" class="battery" title="电量">--%</span>
+    </div>
+  </header>
+
+  <!-- 连接区 -->
+  <section class="connect-zone">
+    <button id="connectBtn" class="connect-btn">连接小车</button>
+    <p id="compatNote" class="compat-note" hidden></p>
+  </section>
+
+  <!-- 模式切换 -->
+  <nav class="tabs" id="tabs" hidden>
+    <button class="tab active" data-mode="dpad">方向键</button>
+    <button class="tab" data-mode="joystick">摇杆</button>
+    <button class="tab" data-mode="gravity">重力</button>
+  </nav>
+
+  <!-- 控制面板 -->
+  <main class="panel" id="panel" hidden>
+
+    <!-- 方向键 -->
+    <div class="mode-pane active" data-pane="dpad">
+      <div class="dpad">
+        <div class="dpad-row">
+          <span></span>
+          <button class="dbtn up" data-cmd="forward">▲</button>
+          <span></span>
+        </div>
+        <div class="dpad-row">
+          <button class="dbtn left" data-cmd="left">◀</button>
+          <button class="dbtn stop" data-cmd="stop">●</button>
+          <button class="dbtn right" data-cmd="right">▶</button>
+        </div>
+        <div class="dpad-row">
+          <span></span>
+          <button class="dbtn down" data-cmd="backward">▼</button>
+          <span></span>
+        </div>
+      </div>
+      <p class="hint">按住方向键行驶，松开自动回中停车。中间 ● 立即停车。</p>
+    </div>
+
+    <!-- 摇杆 -->
+    <div class="mode-pane" data-pane="joystick">
+      <div class="joystick" id="joystick">
+        <div class="joystick-knob" id="joyKnob"></div>
+        <div class="joystick-cross"></div>
+      </div>
+      <div class="readout">
+        <span>转向 <b id="jsSteer">1000</b></span>
+        <span>油门 <b id="jsThrottle">1000</b></span>
+      </div>
+      <p class="hint">拖动摇杆：上下控制油门，左右控制转向。松手回中。</p>
+    </div>
+
+    <!-- 重力感应 -->
+    <div class="mode-pane" data-pane="gravity">
+      <div class="gravity-tilt" id="gravityTilt">
+        <div class="tilt-phone">📱</div>
+        <div class="tilt-label" id="gravityLabel">未校准</div>
+      </div>
+      <div class="readout">
+        <span>转向 <b id="grSteer">1000</b></span>
+        <span>油门 <b id="grThrottle">1000</b></span>
+      </div>
+      <div class="gravity-actions">
+        <button id="gravityEnable" class="mini-btn">开启重力感应</button>
+        <button id="gravityCalib" class="mini-btn">校准居中</button>
+      </div>
+      <p class="hint">手机平放握持 → 点「校准居中」记录姿态；前倾加速、左右倾斜转向。</p>
+    </div>
+
+  </main>
+
+  <!-- 功能控制条 -->
+  <section class="controls" id="controls" hidden>
+    <div class="ctrl-item">
+      <span class="ctrl-label">灯光</span>
+      <button id="lightBtn" class="toggle" aria-pressed="false">关</button>
+    </div>
+    <div class="ctrl-item">
+      <span class="ctrl-label">档位</span>
+      <div class="gear" id="gear">
+        <button data-gear="0.5">低</button>
+        <button data-gear="0.75">中</button>
+        <button data-gear="1" class="active">高</button>
+      </div>
+    </div>
+    <div class="ctrl-item wide">
+      <span class="ctrl-label">转向微调 <b id="trimVal">0</b></span>
+      <input id="trim" type="range" min="-300" max="300" step="10" value="0">
+    </div>
+    <div class="ctrl-item">
+      <button id="batteryBtn" class="mini-btn">刷新电量</button>
+    </div>
+  </section>
+
+  <!-- 日志 -->
+  <section class="log-zone" id="logZone" hidden>
+    <div class="log-head">
+      <span>日志</span>
+      <button id="clearLog" class="mini-btn ghost">清空</button>
+    </div>
+    <pre id="log" class="log"></pre>
+  </section>
+
+  <footer class="foot">
+    <span>协议逆向：Matt Cree · 本工具为爱好者复刻，与小米无官方关联</span>
+  </footer>
+</div>
+
+<script src="js/app.js"></script>
+</body>
+</html>
