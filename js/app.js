@@ -236,11 +236,8 @@
     els.battery.textContent = '--%';
     els.deviceName.textContent = 'WebBLE · 小米吉姆尼';
     log('🔌 已断开', 'warn');
-    // 关闭重力感应监听
-    if (S.gravityHandler && window.DeviceOrientationEvent) {
-      window.removeEventListener('deviceorientation', S.gravityHandler);
-      S.gravityHandler = null;
-    }
+    stopGravity();
+    els.gravityLabel.textContent = '未校准';
   }
 
   // ---- 方向键 ----
@@ -302,7 +299,7 @@
     // 全局兜底：任意抬起都回中，避免漏掉 pointerup
     window.addEventListener('pointerup', resetNeutral);
     window.addEventListener('pointercancel', resetNeutral);
-    $('#stop').addEventListener('click', (e) => { e.preventDefault(); applyDir('stop'); setTimeout(resetNeutral, 120); });
+    // 注：● 停车键已在上面的 .dbtn 循环里绑定 pointerdown/up，无需再按 id 单独绑定
   }
 
   // ---- 摇杆 ----
@@ -361,7 +358,7 @@
   // ---- 重力感应 ----
   function bindGravity() {
     els.gravityEnable.addEventListener('click', async () => {
-      if (!S.connected) { log('⚠️ 请先连接小车', 'warn'); return; }
+      if (!S.connected) log('⚠️ 演示：重力读数可见，但未连接小车，指令未下发', 'warn');
       if (typeof DeviceOrientationEvent === 'undefined') {
         log('❌ 此设备不支持方向传感器', 'err'); return;
       }
@@ -383,6 +380,16 @@
   }
 
   const lastOrient = { beta: 0, gamma: 0 };
+
+  function stopGravity() {
+    if (!S.gravityHandler) return;
+    window.removeEventListener('deviceorientation', S.gravityHandler);
+    S.gravityHandler = null;
+    els.gravityLabel.textContent = '已停止';
+    const phone = els.gravityTilt.querySelector('.tilt-phone');
+    if (phone) phone.style.transform = '';
+  }
+
   function startGravity() {
     if (S.gravityHandler) return;
     const handler = (e) => {
@@ -429,6 +436,8 @@
         S.mode = mode;
         els.tabs.querySelectorAll('.tab').forEach((t) => t.classList.toggle('active', t === tab));
         els.panel.querySelectorAll('.mode-pane').forEach((p) => p.classList.toggle('active', p.dataset.pane === mode));
+        // 离开重力模式时停掉传感器，避免它在后台持续覆盖其它模式的转向/油门指令
+        if (mode !== 'gravity') stopGravity();
         // 切换模式时回中，避免残留指令
         resetNeutral();
       });
@@ -458,19 +467,51 @@
     document.addEventListener('visibilitychange', () => { if (document.hidden) resetNeutral(); });
   }
 
+  // ---- 错误可见化 ----
+  // 手机端没有 DevTools：把脚本异常写进页面日志，并标明来自浏览器扩展的报错
+  function bindErrorReporting() {
+    window.addEventListener('error', (e) => {
+      const sameOrigin = e.filename && (e.filename.startsWith(location.origin) || e.filename.startsWith('file:'));
+      log('❌ 脚本错误' + (e.filename && !sameOrigin ? '（浏览器扩展/外部脚本）' : '') + ': ' + (e.message || '未知'), 'err');
+    });
+    window.addEventListener('unhandledrejection', (e) => {
+      const reason = e.reason || {};
+      log('⚠️ 未处理的异步异常（多来自浏览器扩展，不影响本页）: ' + (reason.message || String(reason)), 'warn');
+    });
+  }
+
   // ---- 启动 ----
   function init() {
-    if (!navigator.bluetooth) {
-      els.compatNote.hidden = false;
-      els.compatNote.textContent = '提示：当前浏览器不支持 Web Bluetooth（iOS Safari 不支持）。建议用安卓 Chrome / Edge / 华为浏览器打开本页。';
-    }
+    bindErrorReporting();
+
+    // 自检：任何 DOM 引用缺失都直接报出来，别让整个初始化静默中断
+    const missing = Object.keys(els).filter((k) => !els[k]);
+    if (missing.length) log('⚠️ 缺失 DOM 节点: ' + missing.join(', '), 'warn');
+
+    // 每个模块独立容错：单一模块出错不再连带 tab / 摇杆 / 重力全部失效
+    const safe = (name, fn) => {
+      try { fn(); }
+      catch (e) {
+        console.error('[MiCar] ' + name + ' 初始化失败', e);
+        log('❌ ' + name + ' 初始化失败: ' + e.message, 'err');
+      }
+    };
+
+    safe('兼容提示', () => {
+      if (!navigator.bluetooth) {
+        els.compatNote.hidden = false;
+        els.compatNote.textContent = '提示：当前浏览器不支持 Web Bluetooth（iOS Safari 不支持）。建议用安卓 Chrome / Edge / 华为浏览器打开本页。';
+      }
+    });
+
     // 面板默认可见：未连接时也能试操作（演示模式），不必先连真车
-    [els.tabs, els.panel, els.controls, els.logZone].forEach((e) => (e.hidden = false));
-    bindDpad();
-    bindJoystick();
-    bindGravity();
-    bindTabs();
-    bindMisc();
+    [els.tabs, els.panel, els.controls, els.logZone].forEach((e) => { if (e) e.hidden = false; });
+
+    safe('模式切换', bindTabs);   // 优先绑定，保证 tab 永远可切换
+    safe('方向键', bindDpad);
+    safe('摇杆', bindJoystick);
+    safe('重力', bindGravity);
+    safe('其他控件', bindMisc);
     log('就绪。点击「连接小车」并选择 JimnygreenSNxxxx。');
   }
 
