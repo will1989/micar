@@ -34,9 +34,10 @@
     }
   },
   "compileType": "miniprogram",
-  "appid": "wxe66443daf86ece6f",
+  "appid": "wx1d132a4a88442ff8",
   "projectname": "micar-ble",
   "miniprogramRoot": "./",
   "simulatorPluginLibVersion": {},
-  "editorSetting": {}
+  "editorSetting": {},
+  "isGameTourist": false
 }

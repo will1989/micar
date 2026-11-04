@@ -379,3 +379,68 @@ button::after {
   text-align: center;
   line-height: 1.6;
 }
+
+/* 隐私授权弹窗 */
+.privacy-mask {
+  position: fixed;
+  left: 0;
+  top: 0;
+  right: 0;
+  bottom: 0;
+  z-index: 999;
+  background: rgba(0, 0, 0, 0.72);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 48rpx;
+}
+.privacy-dialog {
+  width: 100%;
+  max-width: 620rpx;
+  background: #1b2029;
+  border: 1rpx solid #2c3442;
+  border-radius: 24rpx;
+  padding: 40rpx 32rpx 32rpx;
+  display: flex;
+  flex-direction: column;
+}
+.privacy-title {
+  font-size: 34rpx;
+  font-weight: 600;
+  color: #f3f6fb;
+  text-align: center;
+}
+.privacy-text {
+  margin-top: 24rpx;
+  font-size: 26rpx;
+  line-height: 1.7;
+  color: #9fb0c3;
+}
+.privacy-link {
+  margin-top: 20rpx;
+  font-size: 26rpx;
+  color: #22d3ee;
+}
+.privacy-actions {
+  margin-top: 36rpx;
+  display: flex;
+}
+.privacy-btn {
+  flex: 1;
+  margin: 0;
+  font-size: 28rpx;
+  line-height: 80rpx;
+  height: 80rpx;
+  border-radius: 16rpx;
+  border: none;
+}
+.privacy-btn.ghost {
+  background: #2a3240;
+  color: #c8d2e0;
+  margin-right: 20rpx;
+}
+.privacy-btn.primary {
+  background: #22d3ee;
+  color: #0f1115;
+  font-weight: 600;
+}

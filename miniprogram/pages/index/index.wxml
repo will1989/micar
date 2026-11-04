@@ -115,4 +115,17 @@
   </view>
 
   <text class="foot">协议逆向 Matt Cree · 爱好者复刻，与小米无官方关联</text>
+
+  <!-- 微信要求：用户同意隐私保护指引后，方可调用蓝牙/定位/加速度计等隐私接口 -->
+  <view class="privacy-mask" wx:if="{{showPrivacy}}" catchtouchmove="onPrivacyMaskMove">
+    <view class="privacy-dialog">
+      <text class="privacy-title">用户隐私保护提示</text>
+      <text class="privacy-text">使用蓝牙遥控前，请阅读并同意《用户隐私保护指引》。本小程序仅在本地连接遥控小车，不上传、不保存你的个人信息。</text>
+      <text class="privacy-link" bindtap="onOpenPrivacyContract">查看《用户隐私保护指引》</text>
+      <view class="privacy-actions">
+        <button class="privacy-btn ghost" bindtap="onPrivacyDisagree">不同意</button>
+        <button id="agree-btn" class="privacy-btn primary" open-type="agreePrivacyAuthorization" bindagreeprivacyauthorization="onPrivacyAgree">同意并继续</button>
+      </view>
+    </view>
+  </view>
 </view>

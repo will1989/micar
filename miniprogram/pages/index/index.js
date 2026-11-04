@@ -38,6 +38,7 @@ Page({
     logs: [],
     logScrollTop: 0,
     compatNote: '蓝牙需真机预览调试；安卓请开启定位服务并授权位置权限。',
+    showPrivacy: false,
   },
 
   onLoad: function () {
@@ -45,15 +46,32 @@ Page({
     this.joyRect = null;
     this.joyActive = false;
     this.gravityBase = null;
+    this._privacyResolve = null;
+    this._privacyHandler = null;
     this._accelHandler = function (res) {
       if (this.data.gravityRunning) this.onAccel(res);
     }.bind(this);
     wx.onAccelerometerChange(this._accelHandler);
+    // 微信要求：调用蓝牙/定位/加速度计等隐私接口前，须由用户同意隐私保护指引
+    if (typeof wx.onNeedPrivacyAuthorization === 'function') {
+      var that = this;
+      this._privacyHandler = function (res) {
+        // 不同基础库版本回调参数可能是 resolve 函数，也可能是含 resolve 的对象
+        var resolve = typeof res === 'function' ? res : (res && res.resolve);
+        if (typeof resolve !== 'function') return;
+        that._privacyResolve = resolve;
+        that.setData({ showPrivacy: true });
+      };
+      wx.onNeedPrivacyAuthorization(this._privacyHandler);
+    }
     this.appendLog('就绪。点击「连接小车」搜索 JimnygreenSNxxxx。');
   },
 
   onUnload: function () {
     wx.stopAccelerometer({});
+    if (this._privacyHandler && typeof wx.offNeedPrivacyAuthorization === 'function') {
+      wx.offNeedPrivacyAuthorization(this._privacyHandler);
+    }
     ble.disconnect();
   },
 
@@ -332,5 +350,33 @@ Page({
 
   onClearLog: function () {
     this.setData({ logs: [], logScrollTop: 0 });
+  },
+
+  // ---------- 隐私授权 ----------
+  onPrivacyMaskMove: function () {},
+
+  onOpenPrivacyContract: function () {
+    if (typeof wx.openPrivacyContract === 'function') {
+      wx.openPrivacyContract({ fail: function () {} });
+    }
+  },
+
+  onPrivacyAgree: function () {
+    var resolve = this._privacyResolve;
+    this._privacyResolve = null;
+    if (typeof resolve === 'function') {
+      resolve({ buttonId: 'agree-btn', event: 'agree' });
+    }
+    this.setData({ showPrivacy: false });
+  },
+
+  onPrivacyDisagree: function () {
+    var resolve = this._privacyResolve;
+    this._privacyResolve = null;
+    if (typeof resolve === 'function') {
+      resolve({ event: 'disagree' });
+    }
+    this.setData({ showPrivacy: false });
+    this.appendLog('未同意隐私指引，无法使用蓝牙功能', 'warn');
   },
 });
