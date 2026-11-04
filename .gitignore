@@ -1,0 +1,13 @@
+# WorkBuddy 本地项目数据（非交付内容）
+.workbuddy/
+
+# 微信开发者工具个人配置（含本地调试设置，不应入库）
+miniprogram/project.private.config.json
+
+# 系统 / 编辑器
+.DS_Store
+Thumbs.db
+node_modules/
+
+# 临时下载
+.tmp/

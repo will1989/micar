@@ -1,0 +1,9 @@
+{
+  "desc": "MiCar 遥控小程序站点地图",
+  "rules": [
+    {
+      "action": "allow",
+      "page": "*"
+    }
+  ]
+}

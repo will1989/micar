@@ -1,0 +1,118 @@
+<view class="app">
+
+  <view class="topbar">
+    <view class="brand">
+      <text class="logo">🚗</text>
+      <view class="brand-text">
+        <text class="title">MiCar 遥控</text>
+        <text class="sub">{{deviceName}}</text>
+      </view>
+    </view>
+    <view class="status">
+      <text class="pill {{connected ? 'on' : 'off'}}">{{statusText}}</text>
+      <text class="battery">{{battery}}</text>
+    </view>
+  </view>
+
+  <button class="connect-btn" bindtap="onConnectTap" disabled="{{connecting}}">
+    <text wx:if="{{connected}}">断开连接</text>
+    <text wx:elif="{{connecting}}">连接中…</text>
+    <text wx:else>连接小车</text>
+  </button>
+  <text class="compat-note" wx:if="{{compatNote}}">{{compatNote}}</text>
+
+  <view class="tabs">
+    <view class="tab {{mode == 'dpad' ? 'active' : ''}}" data-mode="dpad" bindtap="onModeTap">方向键</view>
+    <view class="tab {{mode == 'joystick' ? 'active' : ''}}" data-mode="joystick" bindtap="onModeTap">摇杆</view>
+    <view class="tab {{mode == 'gravity' ? 'active' : ''}}" data-mode="gravity" bindtap="onModeTap">重力</view>
+  </view>
+
+  <view class="panel">
+
+    <view class="pane" wx:if="{{mode == 'dpad'}}">
+      <view class="dpad">
+        <view class="dpad-row">
+          <view class="dpad-cell"></view>
+          <view class="dbtn {{activeDir == 'forward' ? 'held' : ''}}" data-cmd="forward" bindtouchstart="onDirStart" bindtouchend="onDirEnd" bindtouchcancel="onDirEnd">▲</view>
+          <view class="dpad-cell"></view>
+        </view>
+        <view class="dpad-row">
+          <view class="dbtn {{activeDir == 'left' ? 'held' : ''}}" data-cmd="left" bindtouchstart="onDirStart" bindtouchend="onDirEnd" bindtouchcancel="onDirEnd">◀</view>
+          <view class="dbtn stop {{activeDir == 'stop' ? 'held' : ''}}" data-cmd="stop" bindtouchstart="onDirStart" bindtouchend="onDirEnd" bindtouchcancel="onDirEnd">●</view>
+          <view class="dbtn {{activeDir == 'right' ? 'held' : ''}}" data-cmd="right" bindtouchstart="onDirStart" bindtouchend="onDirEnd" bindtouchcancel="onDirEnd">▶</view>
+        </view>
+        <view class="dpad-row">
+          <view class="dpad-cell"></view>
+          <view class="dbtn {{activeDir == 'backward' ? 'held' : ''}}" data-cmd="backward" bindtouchstart="onDirStart" bindtouchend="onDirEnd" bindtouchcancel="onDirEnd">▼</view>
+          <view class="dpad-cell"></view>
+        </view>
+      </view>
+      <text class="hint">按住方向键行驶，松开自动回中停车；中间 ● 立即停车</text>
+    </view>
+
+    <view class="pane" wx:if="{{mode == 'joystick'}}">
+      <view id="joystick" class="joystick" catchtouchstart="onJoyStart" catchtouchmove="onJoyMove" catchtouchend="onJoyEnd" catchtouchcancel="onJoyEnd">
+        <view class="joystick-cross"></view>
+        <view class="joystick-knob" style="transform: translate({{joyX}}px, {{joyY}}px)"></view>
+      </view>
+      <view class="readout">
+        <text>转向 {{steerReadout}}</text>
+        <text>油门 {{throttleReadout}}</text>
+      </view>
+      <text class="hint">拖动摇杆：上下控制油门，左右控制转向；松手回中</text>
+    </view>
+
+    <view class="pane" wx:if="{{mode == 'gravity'}}">
+      <view class="gravity-tilt" style="transform: rotate({{tiltX}}deg) rotateX({{tiltY}}deg)">
+        <text class="tilt-phone">📱</text>
+      </view>
+      <text class="gravity-state" wx:if="{{gravityRunning && gravityCalibrated}}">运行中</text>
+      <text class="gravity-state" wx:elif="{{gravityRunning}}">采集中点…</text>
+      <text class="gravity-state" wx:else>未开启</text>
+      <view class="readout">
+        <text>转向 {{steerReadout}}</text>
+        <text>油门 {{throttleReadout}}</text>
+      </view>
+      <view class="gravity-actions">
+        <button class="mini-btn" bindtap="onGravityEnable">{{gravityRunning ? '关闭重力' : '开启重力感应'}}</button>
+        <button class="mini-btn" bindtap="onGravityCalib">校准居中</button>
+      </view>
+      <text class="hint">平放握持，前倾加速、左右倾斜转向；开启后自动以当前姿态为中点</text>
+    </view>
+
+  </view>
+
+  <view class="controls">
+    <view class="ctrl-item">
+      <text class="ctrl-label">灯光</text>
+      <button class="toggle {{lightsOn ? 'on' : ''}}" bindtap="onLightTap">{{lightsOn ? '开' : '关'}}</button>
+    </view>
+    <view class="ctrl-item">
+      <text class="ctrl-label">档位</text>
+      <view class="gear">
+        <view class="gear-btn {{gear == 0.5 ? 'active' : ''}}" data-gear="0.5" bindtap="onGearTap">低</view>
+        <view class="gear-btn {{gear == 0.75 ? 'active' : ''}}" data-gear="0.75" bindtap="onGearTap">中</view>
+        <view class="gear-btn {{gear == 1 ? 'active' : ''}}" data-gear="1" bindtap="onGearTap">高</view>
+      </view>
+    </view>
+    <view class="ctrl-item wide">
+      <text class="ctrl-label">转向微调 {{trim}}</text>
+      <slider min="-300" max="300" step="10" value="{{trim}}" activeColor="#22d3ee" block-size="20" bindchange="onTrimChange" bindchanging="onTrimChange" />
+    </view>
+    <view class="ctrl-item">
+      <button class="mini-btn" bindtap="onBatteryTap">刷新电量</button>
+    </view>
+  </view>
+
+  <view class="log-zone">
+    <view class="log-head">
+      <text>日志</text>
+      <button class="mini-btn ghost" bindtap="onClearLog">清空</button>
+    </view>
+    <scroll-view class="log" scroll-y scroll-top="{{logScrollTop}}">
+      <view wx:for="{{logs}}" wx:key="id" class="log-line {{item.kind}}">{{item.text}}</view>
+    </scroll-view>
+  </view>
+
+  <text class="foot">协议逆向 Matt Cree · 爱好者复刻，与小米无官方关联</text>
+</view>

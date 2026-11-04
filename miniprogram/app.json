@@ -1,0 +1,20 @@
+{
+  "pages": [
+    "pages/index/index"
+  ],
+  "window": {
+    "navigationBarTitleText": "MiCar 遥控",
+    "navigationBarBackgroundColor": "#0f1115",
+    "navigationBarTextStyle": "white",
+    "backgroundColor": "#0f1115",
+    "backgroundTextStyle": "light"
+  },
+  "permission": {
+    "scope.userLocation": {
+      "desc": "用于搜索附近的蓝牙小车（安卓 BLE 扫描需要定位权限）"
+    }
+  },
+  "style": "v2",
+  "sitemapLocation": "sitemap.json",
+  "lazyCodeLoading": "requiredComponents"
+}
