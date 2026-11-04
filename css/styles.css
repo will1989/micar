@@ -67,10 +67,14 @@ body{
 .dbtn{
   width:96px;height:96px;border-radius:20px;border:none;
   background:var(--surface-2);color:var(--text);font-size:30px;cursor:pointer;
-  box-shadow:var(--shadow);transition:transform .06s ease,background .1s ease;
+  box-shadow:var(--shadow);transition:transform .1s ease,background .1s ease,box-shadow .14s ease,filter .12s ease;
   touch-action:none;
 }
-.dbtn:active,.dbtn.held{background:linear-gradient(135deg,var(--accent),var(--accent-2));color:#04121a;transform:scale(.95)}
+.dbtn:active,.dbtn.held{
+  background:linear-gradient(135deg,var(--accent),var(--accent-2));color:#04121a;
+  transform:scale(.9);filter:brightness(1.08);
+  box-shadow:0 0 0 5px rgba(34,211,238,.18),0 6px 28px rgba(34,211,238,.55);
+}
 .dbtn.stop{font-size:18px;color:var(--bad)}
 .dbtn.stop:active{background:var(--bad);color:#1a0d0d}
 
@@ -79,7 +83,10 @@ body{
   position:relative;width:220px;height:220px;margin:14px auto 6px;border-radius:50%;
   background:radial-gradient(circle at 50% 50%,#20242e,#14171d);
   box-shadow:inset 0 0 0 2px rgba(255,255,255,.05),var(--shadow);
-  touch-action:none;overflow:hidden;
+  touch-action:none;overflow:hidden;transition:box-shadow .15s ease;
+}
+.joystick.active{
+  box-shadow:inset 0 0 0 2px rgba(34,211,238,.45),0 0 0 5px rgba(34,211,238,.1),0 0 32px rgba(34,211,238,.3);
 }
 .joystick-cross{position:absolute;inset:0}
 .joystick-cross::before,.joystick-cross::after{content:"";position:absolute;background:rgba(255,255,255,.06)}
@@ -89,8 +96,23 @@ body{
   position:absolute;left:50%;top:50%;width:74px;height:74px;border-radius:50%;
   transform:translate(-50%,-50%);
   background:linear-gradient(135deg,var(--accent),var(--accent-2));
-  box-shadow:0 6px 16px rgba(34,211,238,.4);transition:transform .03s linear;
+  box-shadow:0 6px 16px rgba(34,211,238,.4);
+  transition:transform .03s linear,box-shadow .14s ease,filter .14s ease;
 }
+.joystick-knob.active{
+  filter:brightness(1.12);
+  box-shadow:0 0 0 8px rgba(34,211,238,.16),0 6px 28px rgba(34,211,238,.75);
+}
+
+/* 演示提示与实时状态 */
+.demo-note{
+  margin:0 0 10px;padding:8px 12px;border-radius:8px;
+  background:rgba(251,191,36,.1);border:1px solid rgba(251,191,36,.28);
+  color:#fbbf24;font-size:12px;line-height:1.5;text-align:center;
+}
+body.is-connected .demo-note{display:none}
+.dir-state{margin-top:8px;font-size:13px;color:var(--muted);text-align:center;transition:color .12s ease}
+.dir-state.on{color:var(--accent);font-weight:600}
 .readout{display:flex;justify-content:center;gap:24px;margin-top:8px;font-size:13px;color:var(--muted)}
 .readout b{color:var(--text);font-variant-numeric:tabular-nums}
 

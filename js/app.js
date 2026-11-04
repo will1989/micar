@@ -66,6 +66,10 @@
     joyKnob: $('#joyKnob'),
     jsSteer: $('#jsSteer'),
     jsThrottle: $('#jsThrottle'),
+    dpSteer: $('#dpSteer'),
+    dpThrottle: $('#dpThrottle'),
+    dirState: $('#dirState'),
+    joyState: $('#joyState'),
     gravityTilt: $('#gravityTilt'),
     gravityLabel: $('#gravityLabel'),
     gravityEnable: $('#gravityEnable'),
@@ -88,6 +92,8 @@
   function setStatus(text, cls) {
     els.statusPill.textContent = text;
     els.statusPill.className = 'pill ' + cls;
+    // 连接后隐藏所有"演示模式"提示条
+    document.body.classList.toggle('is-connected', cls === 'pill-on');
   }
 
   // ---- 编码 ----
@@ -238,8 +244,15 @@
   }
 
   // ---- 方向键 ----
+  const DIR_LABEL = { forward: '前进', backward: '后退', left: '左转', right: '右转', stop: '停车' };
+
+  function syncDpadReadout() {
+    els.dpSteer.textContent = Math.round(S.targetSteering + S.trim);
+    els.dpThrottle.textContent = Math.round(S.targetThrottle);
+  }
+
+  // 操作反馈与连接状态解耦：未连接时同样显示按下态与读数，仅不下发指令
   function applyDir(cmd) {
-    if (!S.connected) { log('⚠️ 请先连接小车', 'warn'); return; }
     const g = S.gear;
     const fwd = CENTER + (MAX - CENTER) * g;
     const rev = CENTER - (MAX - CENTER) * g;
@@ -250,24 +263,37 @@
       case 'right':    S.targetSteering = MAX;        S.targetThrottle = CENTER; break;
       case 'stop':     S.targetThrottle = CENTER;     S.targetSteering = CENTER; break;
     }
+    syncDpadReadout();
+    if (!S.connected) log('⚠️ 演示：' + (DIR_LABEL[cmd] || cmd) + '（未连接小车，指令未下发）', 'warn');
   }
+
   function resetNeutral() {
-    if (!S.connected) return;
     S.targetThrottle = CENTER;
     S.targetSteering = CENTER;
+    syncDpadReadout();
   }
 
   function bindDpad() {
+    let releaseTimer = null;
     document.querySelectorAll('.dbtn').forEach((btn) => {
       btn.addEventListener('pointerdown', (e) => {
         e.preventDefault();
-        if (!S.connected) { log('⚠️ 请先连接小车', 'warn'); return; }
+        if (releaseTimer) { clearTimeout(releaseTimer); releaseTimer = null; }
         btn.classList.add('held');
+        els.dirState.textContent = DIR_LABEL[btn.dataset.cmd] || '操作中';
+        els.dirState.classList.add('on');
         applyDir(btn.dataset.cmd);
       });
       const release = () => {
-        btn.classList.remove('held');
         resetNeutral();
+        // 指令立即回中，高亮延迟熄灭：鼠标快速单击也能看到明确的"按到了"反馈
+        if (releaseTimer) clearTimeout(releaseTimer);
+        releaseTimer = setTimeout(() => {
+          btn.classList.remove('held');
+          els.dirState.textContent = '待命 · 按住方向键';
+          els.dirState.classList.remove('on');
+          releaseTimer = null;
+        }, 240);
       };
       btn.addEventListener('pointerup', release);
       btn.addEventListener('pointercancel', release);
@@ -283,6 +309,7 @@
   function bindJoystick() {
     const j = els.joystick;
     let active = false;
+    let releaseTimer = null;
     const setKnob = (x, y) => { els.joyKnob.style.transform = `translate(calc(-50% + ${x}px), calc(-50% + ${y}px))`; };
     const update = (clientX, clientY) => {
       const r = j.getBoundingClientRect();
@@ -305,8 +332,27 @@
       resetNeutral();
       els.jsSteer.textContent = '1000';
       els.jsThrottle.textContent = '1000';
+      if (releaseTimer) clearTimeout(releaseTimer);
+      releaseTimer = setTimeout(() => {
+        j.classList.remove('active');
+        els.joyKnob.classList.remove('active');
+        els.joyState.textContent = '待命 · 按住摇杆拖动';
+        els.joyState.classList.remove('on');
+        releaseTimer = null;
+      }, 240);
     };
-    j.addEventListener('pointerdown', (e) => { e.preventDefault(); if (!S.connected) { log('⚠️ 请先连接小车', 'warn'); return; } active = true; j.setPointerCapture(e.pointerId); update(e.clientX, e.clientY); });
+    j.addEventListener('pointerdown', (e) => {
+      e.preventDefault();
+      if (releaseTimer) { clearTimeout(releaseTimer); releaseTimer = null; }
+      active = true;
+      j.classList.add('active');
+      els.joyKnob.classList.add('active');
+      els.joyState.textContent = '拖动中 · 实时跟随';
+      els.joyState.classList.add('on');
+      if (!S.connected) log('⚠️ 演示：摇杆可拖动，但未连接小车，指令未下发', 'warn');
+      try { j.setPointerCapture(e.pointerId); } catch (err) { /* 部分浏览器不支持 */ }
+      update(e.clientX, e.clientY);
+    });
     j.addEventListener('pointermove', (e) => { if (active) update(e.clientX, e.clientY); });
     j.addEventListener('pointerup', end);
     j.addEventListener('pointercancel', end);
@@ -418,6 +464,8 @@
       els.compatNote.hidden = false;
       els.compatNote.textContent = '提示：当前浏览器不支持 Web Bluetooth（iOS Safari 不支持）。建议用安卓 Chrome / Edge / 华为浏览器打开本页。';
     }
+    // 面板默认可见：未连接时也能试操作（演示模式），不必先连真车
+    [els.tabs, els.panel, els.controls, els.logZone].forEach((e) => (e.hidden = false));
     bindDpad();
     bindJoystick();
     bindGravity();

@@ -45,6 +45,7 @@
 
     <!-- 方向键 -->
     <div class="mode-pane active" data-pane="dpad">
+      <p class="demo-note">未连接小车 · 操作演示（指令不会下发）</p>
       <div class="dpad">
         <div class="dpad-row">
           <span></span>
@@ -62,11 +63,17 @@
           <span></span>
         </div>
       </div>
+      <div class="readout">
+        <span>转向 <b id="dpSteer">1000</b></span>
+        <span>油门 <b id="dpThrottle">1000</b></span>
+      </div>
+      <div class="dir-state" id="dirState">待命 · 按住方向键</div>
       <p class="hint">按住方向键行驶，松开自动回中停车。中间 ● 立即停车。</p>
     </div>
 
     <!-- 摇杆 -->
     <div class="mode-pane" data-pane="joystick">
+      <p class="demo-note">未连接小车 · 操作演示（指令不会下发）</p>
       <div class="joystick" id="joystick">
         <div class="joystick-knob" id="joyKnob"></div>
         <div class="joystick-cross"></div>
@@ -75,6 +82,7 @@
         <span>转向 <b id="jsSteer">1000</b></span>
         <span>油门 <b id="jsThrottle">1000</b></span>
       </div>
+      <div class="dir-state" id="joyState">待命 · 按住摇杆拖动</div>
       <p class="hint">拖动摇杆：上下控制油门，左右控制转向。松手回中。</p>
     </div>
 

@@ -30,6 +30,7 @@
   <view class="panel">
 
     <view class="pane" wx:if="{{mode == 'dpad'}}">
+      <view class="demo-note" wx:if="{{!connected}}">未连接小车 · 操作演示（指令不会下发）</view>
       <view class="dpad">
         <view class="dpad-row">
           <view class="dpad-cell"></view>
@@ -47,18 +48,25 @@
           <view class="dpad-cell"></view>
         </view>
       </view>
+      <view class="readout">
+        <text>转向 {{steerReadout}}</text>
+        <text>油门 {{throttleReadout}}</text>
+      </view>
+      <view class="dir-state {{activeDir ? 'on' : ''}}">{{activeDir ? dirLabel : '待命 · 按住方向键'}}</view>
       <text class="hint">按住方向键行驶，松开自动回中停车；中间 ● 立即停车</text>
     </view>
 
     <view class="pane" wx:if="{{mode == 'joystick'}}">
-      <view id="joystick" class="joystick" catchtouchstart="onJoyStart" catchtouchmove="onJoyMove" catchtouchend="onJoyEnd" catchtouchcancel="onJoyEnd">
+      <view class="demo-note" wx:if="{{!connected}}">未连接小车 · 操作演示（指令不会下发）</view>
+      <view id="joystick" class="joystick {{joyPressed ? 'active' : ''}}" catchtouchstart="onJoyStart" catchtouchmove="onJoyMove" catchtouchend="onJoyEnd" catchtouchcancel="onJoyEnd">
         <view class="joystick-cross"></view>
-        <view class="joystick-knob" style="transform: translate({{joyX}}px, {{joyY}}px)"></view>
+        <view class="joystick-knob {{joyPressed ? 'active' : ''}}" style="transform: translate({{joyX}}px, {{joyY}}px)"></view>
       </view>
       <view class="readout">
         <text>转向 {{steerReadout}}</text>
         <text>油门 {{throttleReadout}}</text>
       </view>
+      <view class="dir-state {{joyPressed ? 'on' : ''}}">{{joyPressed ? '拖动中 · 实时跟随' : '待命 · 按住摇杆拖动'}}</view>
       <text class="hint">拖动摇杆：上下控制油门，左右控制转向；松手回中</text>
     </view>
 

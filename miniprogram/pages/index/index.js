@@ -9,6 +9,14 @@ function clamp(v, lo, hi) {
   return Math.max(lo, Math.min(hi, v));
 }
 
+var DIR_LABEL = {
+  forward: '前进',
+  backward: '后退',
+  left: '左转',
+  right: '右转',
+  stop: '停车',
+};
+
 function nowText() {
   var d = new Date();
   function p(n) { return (n < 10 ? '0' : '') + n; }
@@ -39,6 +47,8 @@ Page({
     logScrollTop: 0,
     compatNote: '蓝牙需真机预览调试；安卓请开启定位服务并授权位置权限。',
     showPrivacy: false,
+    dirLabel: '',
+    joyPressed: false,
   },
 
   onLoad: function () {
@@ -69,6 +79,8 @@ Page({
 
   onUnload: function () {
     wx.stopAccelerometer({});
+    if (this._dirTimer) clearTimeout(this._dirTimer);
+    if (this._joyTimer) clearTimeout(this._joyTimer);
     if (this._privacyHandler && typeof wx.offNeedPrivacyAuthorization === 'function') {
       wx.offNeedPrivacyAuthorization(this._privacyHandler);
     }
@@ -161,11 +173,19 @@ Page({
     }.bind(this));
   },
 
+  // ---------- 通用：轻微震动反馈（真机有效，模拟器静默忽略）----------
+  vibrate: function () {
+    if (typeof wx.vibrateShort === 'function') {
+      wx.vibrateShort({ type: 'light', fail: function () {} });
+    }
+  },
+
   // ---------- 方向键 ----------
+  // 操作反馈与连接状态解耦：未连接时同样显示按下态与读数，仅不下发指令
   onDirStart: function (e) {
-    if (!this.data.connected) {
-      this.appendLog('请先连接小车', 'warn');
-      return;
+    if (this._dirTimer) {
+      clearTimeout(this._dirTimer);
+      this._dirTimer = null;
     }
     var cmd = e.currentTarget.dataset.cmd;
     var s = CENTER;
@@ -174,44 +194,77 @@ Page({
     else if (cmd === 'backward') t = MIN;
     else if (cmd === 'left') s = MIN;
     else if (cmd === 'right') s = MAX;
-    ble.setTargets({ steering: s, throttle: t });
-    this.setData({ activeDir: cmd, steerReadout: s, throttleReadout: t });
+    var label = DIR_LABEL[cmd] || cmd;
+    if (this.data.connected) {
+      ble.setTargets({ steering: s, throttle: t });
+      this.appendLog(label + ' → 转向 ' + s + ' / 油门 ' + t, 'ok');
+    } else {
+      this.appendLog('演示：' + label + '（未连接小车，指令未下发）', 'warn');
+    }
+    this.setData({ activeDir: cmd, dirLabel: label, steerReadout: s, throttleReadout: t });
+    this.vibrate();
   },
 
   onDirEnd: function () {
+    // 指令与读数立即回中，按钮高亮延迟熄灭：鼠标快速单击也能看到明确的"按到了"反馈
     ble.setTargets({ steering: CENTER, throttle: CENTER });
-    this.setData({ activeDir: '', steerReadout: CENTER, throttleReadout: CENTER });
+    this.setData({ steerReadout: CENTER, throttleReadout: CENTER });
+    var that = this;
+    if (this._dirTimer) clearTimeout(this._dirTimer);
+    this._dirTimer = setTimeout(function () {
+      that.setData({ activeDir: '', dirLabel: '' });
+      that._dirTimer = null;
+    }, 240);
   },
 
   // ---------- 摇杆 ----------
-  measureJoystick: function () {
+  measureJoystick: function (cb) {
     wx.createSelectorQuery().in(this)
       .select('#joystick')
       .boundingClientRect(function (rect) {
         if (rect) this.joyRect = rect;
+        if (typeof cb === 'function') cb(this.joyRect);
       }.bind(this))
       .exec();
   },
 
   onJoyStart: function (e) {
-    if (!this.data.connected) {
-      this.appendLog('请先连接小车', 'warn');
-      return;
+    var touch = e.touches && e.touches[0];
+    if (!touch) return;
+    // touch 是事件快照，异步测量结束后还要用，先复制坐标
+    var point = { clientX: touch.clientX, clientY: touch.clientY };
+    var that = this;
+    if (this._joyTimer) {
+      clearTimeout(this._joyTimer);
+      this._joyTimer = null;
     }
-    if (!this.joyRect) this.measureJoystick();
     this.joyActive = true;
-    this.updateJoy(e.touches[0]);
+    this.setData({ joyPressed: true });
+    if (!this.data.connected) {
+      this.appendLog('演示：摇杆可拖动，但未连接小车，指令未下发', 'warn');
+    }
+    this.vibrate();
+    var start = function () { that.updateJoy(point); };
+    // 首次切到摇杆时尺寸可能还没测回来，必须等 rect 到手再计算，否则第一次按下没反馈
+    if (!this.joyRect) this.measureJoystick(start);
+    else start();
   },
 
   onJoyMove: function (e) {
     if (!this.joyActive) return;
-    this.updateJoy(e.touches[0]);
+    this.updateJoy(e.touches && e.touches[0]);
   },
 
   onJoyEnd: function () {
     this.joyActive = false;
     ble.setTargets({ steering: CENTER, throttle: CENTER });
     this.setData({ joyX: 0, joyY: 0, steerReadout: CENTER, throttleReadout: CENTER });
+    var that = this;
+    if (this._joyTimer) clearTimeout(this._joyTimer);
+    this._joyTimer = setTimeout(function () {
+      that.setData({ joyPressed: false });
+      that._joyTimer = null;
+    }, 240);
   },
 
   updateJoy: function (touch) {
@@ -231,7 +284,9 @@ Page({
     var ny = clamp(dy / max, -1, 1);
     var steering = Math.round(CENTER + nx * (MAX - CENTER));
     var throttle = Math.round(CENTER - ny * (MAX - CENTER));
-    ble.setTargets({ steering: steering, throttle: throttle });
+    if (this.data.connected) {
+      ble.setTargets({ steering: steering, throttle: throttle });
+    }
     this.setData({
       joyX: dx,
       joyY: dy,
