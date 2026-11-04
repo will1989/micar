@@ -30,8 +30,13 @@
 4. 点「连接小车」，在蓝牙弹窗中选择 `JimnygreenSNxxxx`；
 5. 选择操控模式，开跑 🏎️
 
-### 方式二：GitHub Pages（公网 HTTPS）
-仓库已包含 GitHub Actions 工作流（`.github/workflows/pages.yml`）。在仓库 **Settings → Pages → Source** 选择 **GitHub Actions**，Push 后自动部署到 `https://will1989.github.io/micar/`，用手机浏览器访问即可（HTTPS 满足 Web Bluetooth 安全要求）。
+### 方式二：GitHub Pages（公网 HTTPS，已上线）
+
+✅ 已通过 GitHub Actions 自动部署，直接访问：
+
+**https://will1989.github.io/micar/**
+
+用手机浏览器（安卓 Chrome / Edge / 华为浏览器）打开即可连接小车 —— HTTPS 满足 Web Bluetooth 的安全要求，无需传文件到手机。
 
 ## 🔧 技术细节（协议摘要）
 
