@@ -157,7 +157,11 @@ input[type=range]{width:100%;accent-color:var(--accent)}
 .foot{margin-top:auto;font-size:10px;color:#5b6373;text-align:center;line-height:1.5}
 
 /* ==================== 双手柄 / 横屏布局 ==================== */
-.stage-note,.angle-readout,.dual-hint{display:none}
+.stage-note,.angle-readout,.dual-hint,.axis-switch{display:none}
+.axis-switch{background:var(--surface-2);border-radius:999px;padding:3px;margin-top:6px;gap:2px}
+.axis-btn{padding:5px 12px;border:none;border-radius:999px;background:transparent;color:var(--muted);font-size:11px;cursor:pointer;white-space:nowrap}
+.axis-btn.active{background:linear-gradient(135deg,var(--accent),var(--accent-2));color:#04121a;font-weight:700}
+.app.dual .axis-switch{display:flex}
 
 /* 双区模式：方向键 + 摇杆 两个面板同时渲染 */
 .app.dual .panel,.app.layout-wide .panel{
@@ -175,7 +179,7 @@ input[type=range]{width:100%;accent-color:var(--accent)}
   color:var(--muted);opacity:.7;pointer-events:none;
 }
 .app.dual .mode-pane[data-pane="dpad"]::before{content:"L · 油门"}
-.app.dual .mode-pane[data-pane="joystick"]::before{content:"R · 转向";left:auto;right:10px}
+.app.dual .mode-pane[data-pane="joystick"]::before{content:"R · 摇杆";left:auto;right:10px}
 
 /* 左手：方向键只保留前进 / 后退（松开即停） */
 .app.dual .dpad.throttle-only{display:flex;flex-direction:column;align-items:center;gap:10px}
@@ -198,9 +202,9 @@ input[type=range]{width:100%;accent-color:var(--accent)}
 .app.dual .dual-hint{display:block}
 .app.dual .mode-pane.active .hint:not(.dual-hint){display:none}
 
-/* 右手：摇杆锁为水平单轴，只输出转向角 */
-.app.dual .joystick .joystick-cross::before{display:none}
-.app.dual .joystick .joystick-cross::after{
+/* 右手：默认 360° 全向；「仅转向」模式隐藏竖线、强化水平导轨 */
+.app.dual .joystick.steer-only .joystick-cross::before{display:none}
+.app.dual .joystick.steer-only .joystick-cross::after{
   height:2px;top:50%;left:6%;right:6%;background:rgba(34,211,238,.24);
 }
 .app.dual .angle-readout{

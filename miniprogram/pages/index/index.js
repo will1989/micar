@@ -33,6 +33,9 @@ Page({
     battery: '--%',
     mode: 'gamepad',
     wide: false,
+    // full = 圆形摇杆 360°（水平转向 + 垂直油门，与原版 App 一致）
+    // steer = 水平单轴，只输出转向（油门完全交给左侧方向键）
+    joyAxis: 'full',
     lightsOn: false,
     gear: 1,
     trim: 0,
@@ -41,8 +44,8 @@ Page({
     throttleReadout: CENTER,
     angleText: '0°',
     idleDirText: '待命 · 按住前进 / 后退',
-    idleJoyText: '待命 · 左右拖动转向',
-    joyActiveText: '转向中 · 实时跟随',
+    idleJoyText: '待命 · 360° 拖动',
+    joyActiveText: '全向操控 · 实时跟随',
     joyX: 0,
     joyY: 0,
     tiltX: 0,
@@ -63,9 +66,11 @@ Page({
     this.joyActive = false;
     this.gravityBase = null;
     this.modeLocked = false;
-    // 两个正交输入分量：方向键写 throttle，摇杆写 steering（双手柄模式互不覆盖）
+    // 两个正交输入分量：摇杆写转向，方向键/摇杆垂直轴共同决定油门
     this.steerVal = CENTER;
     this.throttleVal = CENTER;
+    this.dirThrottle = CENTER;
+    this.joyThrottle = CENTER;
     this._privacyResolve = null;
     this._privacyHandler = null;
     this._accelHandler = function (res) {
@@ -103,6 +108,7 @@ Page({
   },
 
   onHide: function () {
+    this.resetSources();
     this.applyInputs({ steering: CENTER, throttle: CENTER });
     this.stopGravity();
   },
@@ -132,12 +138,26 @@ Page({
     this.setData({ logs: logs, logScrollTop: logs.length * 24 });
   },
 
-  // ---------- 输入：只更新传入的一侧，另一侧保持不变 ----------
+  // ---------- 输入 ----------
+  resetSources: function () {
+    this.dirThrottle = CENTER;
+    this.joyThrottle = CENTER;
+  },
+
+  // 油门仲裁：方向键按下时优先，松开后回落到 360° 摇杆的垂直分量。
+  // 这样双手同时操作、任一侧松手都不会把另一侧指令清零。
+  effectiveThrottle: function () {
+    if (this.data.mode !== 'gamepad') return this.throttleVal;
+    if (this.dirThrottle !== CENTER) return this.dirThrottle;
+    return this.data.joyAxis === 'full' ? this.joyThrottle : CENTER;
+  },
+
+  // 始终下发完整的两个分量，避免部分更新与页面读数不一致
   applyInputs: function (next) {
     next = next || {};
     if (next.steering !== undefined) this.steerVal = clamp(next.steering, MIN, MAX);
     if (next.throttle !== undefined) this.throttleVal = clamp(next.throttle, MIN, MAX);
-    ble.setTargets(next);
+    ble.setTargets({ steering: this.steerVal, throttle: this.throttleVal });
     // 读数与实际下发值一致：叠加微调与档位（BLE 层同样处理）
     var steer = Math.round(clamp(this.steerVal + Number(this.data.trim), MIN, MAX));
     var thr = Math.round(clamp(CENTER + (this.throttleVal - CENTER) * Number(this.data.gear), MIN, MAX));
@@ -154,18 +174,23 @@ Page({
     if (fromUser) this.modeLocked = true;
     var dual = mode === 'gamepad';
     this.stopGravity();
+    this.resetSources();
+    this.joyActive = false;
+    this.joyTouchId = undefined;
     this.applyInputs({ steering: CENTER, throttle: CENTER });
+    var full = this.data.joyAxis === 'full';
     this.setData({
       mode: mode,
       activeDir: '',
       dirLabel: '',
       joyX: 0,
       joyY: 0,
+      joyPressed: false,
       tiltX: 0,
       tiltY: 0,
       idleDirText: dual ? '待命 · 按住前进 / 后退' : '待命 · 按住方向键',
-      idleJoyText: dual ? '待命 · 左右拖动转向' : '待命 · 按住摇杆拖动',
-      joyActiveText: dual ? '转向中 · 实时跟随' : '拖动中 · 实时跟随',
+      idleJoyText: dual ? (full ? '待命 · 360° 拖动' : '待命 · 左右拖动转向') : '待命 · 按住摇杆拖动',
+      joyActiveText: dual ? (full ? '全向操控 · 实时跟随' : '转向中 · 实时跟随') : '拖动中 · 实时跟随',
     }, function () {
       this.joyRect = null;
       if (mode === 'joystick' || dual) this.measureJoystick();
@@ -176,6 +201,29 @@ Page({
     var mode = e.currentTarget.dataset.mode;
     if (mode === this.data.mode) return;
     this.setMode(mode, true);
+  },
+
+  // 摇杆轴向切换（仅双手柄模式可见）
+  onJoyAxisTap: function (e) {
+    var axis = e.currentTarget.dataset.axis;
+    if (axis !== 'full' && axis !== 'steer') return;
+    if (axis === this.data.joyAxis) return;
+    this.resetSources();
+    this.joyActive = false;
+    this.setData({
+      joyAxis: axis,
+      joyX: 0,
+      joyY: 0,
+      joyPressed: false,
+      idleJoyText: axis === 'full' ? '待命 · 360° 拖动' : '待命 · 左右拖动转向',
+      joyActiveText: axis === 'full' ? '全向操控 · 实时跟随' : '转向中 · 实时跟随',
+    });
+    this.applyInputs({ steering: CENTER, throttle: CENTER });
+    this.joyRect = null;
+    this.measureJoystick();
+    this.appendLog(axis === 'full'
+      ? '摇杆：360° 全向（左右转向 / 上下油门）'
+      : '摇杆：仅转向（水平单轴，油门交给左侧方向键）');
   },
 
   // ---------- 连接 ----------
@@ -211,6 +259,7 @@ Page({
   },
 
   onDisconnected: function () {
+    this.resetSources();
     this.stopGravity();
     this.applyInputs({ steering: CENTER, throttle: CENTER });
     this.setData({
@@ -248,9 +297,13 @@ Page({
     else if (cmd === 'left') s = MIN;
     else if (cmd === 'right') s = MAX;
     var label = DIR_LABEL[cmd] || cmd;
-    // 双手柄：左手只写油门，转向由右侧摇杆独占
-    if (dual) this.applyInputs({ throttle: t });
-    else this.applyInputs({ steering: s, throttle: t });
+    if (dual) {
+      // 左手只负责油门；转向由右侧摇杆独占
+      this.dirThrottle = t;
+      this.applyInputs({ throttle: this.effectiveThrottle() });
+    } else {
+      this.applyInputs({ steering: s, throttle: t });
+    }
     if (this.data.connected) {
       this.appendLog(label + ' → 油门 ' + t + (dual ? '（转向由摇杆控制）' : ' / 转向 ' + s), 'ok');
     } else {
@@ -262,8 +315,12 @@ Page({
 
   onDirEnd: function () {
     // 只回中自己这一侧；双区模式下另一侧（摇杆）指令保持不变
-    if (this.data.mode === 'gamepad') this.applyInputs({ throttle: CENTER });
-    else this.applyInputs({ steering: CENTER, throttle: CENTER });
+    if (this.data.mode === 'gamepad') {
+      this.dirThrottle = CENTER;
+      this.applyInputs({ throttle: this.effectiveThrottle() });
+    } else {
+      this.applyInputs({ steering: CENTER, throttle: CENTER });
+    }
     var that = this;
     if (this._dirTimer) clearTimeout(this._dirTimer);
     this._dirTimer = setTimeout(function () {
@@ -284,8 +341,10 @@ Page({
   },
 
   onJoyStart: function (e) {
-    var touch = e.touches && e.touches[0];
+    var touch = (e.changedTouches && e.changedTouches[0]) || (e.touches && e.touches[0]);
     if (!touch) return;
+    // 多指操作：只跟随摇杆这一根手指，避免读到左手方向键的触点坐标
+    this.joyTouchId = touch.identifier;
     // touch 是事件快照，异步测量结束后还要用，先复制坐标
     var point = { clientX: touch.clientX, clientY: touch.clientY };
     var that = this;
@@ -307,13 +366,33 @@ Page({
 
   onJoyMove: function (e) {
     if (!this.joyActive) return;
-    this.updateJoy(e.touches && e.touches[0]);
+    var list = e.touches || [];
+    var touch = null;
+    for (var i = 0; i < list.length; i++) {
+      if (list[i].identifier === this.joyTouchId) { touch = list[i]; break; }
+    }
+    if (!touch && list.length === 1) touch = list[0]; // 兼容不返回 identifier 的基础库
+    this.updateJoy(touch);
   },
 
-  onJoyEnd: function () {
+  onJoyEnd: function (e) {
+    // 多指操作：抬起的是另一根手指时不能把摇杆回中；全部抬完仍需回中（安全兜底）
+    if (e && e.changedTouches && e.changedTouches.length && this.joyTouchId !== undefined) {
+      var mine = false;
+      for (var i = 0; i < e.changedTouches.length; i++) {
+        if (e.changedTouches[i].identifier === this.joyTouchId) { mine = true; break; }
+      }
+      if (!mine && e.touches && e.touches.length) return;
+    }
     this.joyActive = false;
-    if (this.data.mode === 'gamepad') this.applyInputs({ steering: CENTER });
-    else this.applyInputs({ steering: CENTER, throttle: CENTER });
+    this.joyTouchId = undefined;
+    this.joyThrottle = CENTER;
+    if (this.data.mode === 'gamepad') {
+      // 转向回中，油门回落到仍然按着的左侧方向键
+      this.applyInputs({ steering: CENTER, throttle: this.effectiveThrottle() });
+    } else {
+      this.applyInputs({ steering: CENTER, throttle: CENTER });
+    }
     this.setData({ joyX: 0, joyY: 0 });
     var that = this;
     if (this._joyTimer) clearTimeout(this._joyTimer);
@@ -327,11 +406,12 @@ Page({
     var rect = this.joyRect;
     if (!rect || !touch) return;
     var dual = this.data.mode === 'gamepad';
+    // 仅「仅转向」模式锁水平轴；默认 360° 全向，垂直位移同样生效
+    var singleAxis = dual && this.data.joyAxis === 'steer';
     var cx = rect.left + rect.width / 2;
     var cy = rect.top + rect.height / 2;
     var dx = touch.clientX - cx;
-    // 双手柄：锁水平单轴，垂直位移不参与计算、knob 也不上下移动
-    var dy = dual ? 0 : (touch.clientY - cy);
+    var dy = singleAxis ? 0 : (touch.clientY - cy);
     var max = rect.width / 2;
     var dist = Math.sqrt(dx * dx + dy * dy);
     if (dist > max) {
@@ -342,8 +422,12 @@ Page({
     var ny = clamp(dy / max, -1, 1);
     var steering = Math.round(CENTER + nx * (MAX - CENTER));
     var throttle = Math.round(CENTER - ny * (MAX - CENTER));
-    if (dual) this.applyInputs({ steering: steering });
-    else this.applyInputs({ steering: steering, throttle: throttle });
+    if (dual) {
+      this.joyThrottle = singleAxis ? CENTER : throttle;
+      this.applyInputs({ steering: steering, throttle: this.effectiveThrottle() });
+    } else {
+      this.applyInputs({ steering: steering, throttle: throttle });
+    }
     this.setData({ joyX: dx, joyY: dy });
   },
 
@@ -408,6 +492,7 @@ Page({
     if (!this.data.gravityRunning) return;
     wx.stopAccelerometer({});
     this.gravityBase = null;
+    this.resetSources();
     this.applyInputs({ steering: CENTER, throttle: CENTER });
     this.setData({
       gravityRunning: false,

@@ -135,6 +135,8 @@ button::after {
   align-items: center;
 }
 .hint {
+  width: 100%;
+  box-sizing: border-box;
   margin-top: 20rpx;
   font-size: 22rpx;
   color: #8b93a3;
@@ -192,6 +194,10 @@ button::after {
   background: linear-gradient(135deg, #20242e, #14171d);
   box-shadow: inset 0 0 0 4rpx rgba(255, 255, 255, 0.05), 0 12rpx 32rpx rgba(0, 0, 0, 0.35);
   overflow: hidden;
+  transition: box-shadow .15s ease;
+}
+.joystick.active {
+  box-shadow: inset 0 0 0 4rpx rgba(34, 211, 238, 0.35), 0 0 0 6rpx rgba(34, 211, 238, 0.12), 0 0 48rpx rgba(34, 211, 238, 0.3);
 }
 .joystick-cross {
   position: absolute;
@@ -217,12 +223,6 @@ button::after {
   right: 8%;
   height: 2rpx;
   background: rgba(255, 255, 255, 0.06);
-}
-.joystick {
-  transition: box-shadow .15s ease;
-}
-.joystick.active {
-  box-shadow: inset 0 0 0 4rpx rgba(34, 211, 238, 0.35), 0 0 0 6rpx rgba(34, 211, 238, 0.12), 0 0 48rpx rgba(34, 211, 238, 0.3);
 }
 .joystick-knob {
   position: absolute;
@@ -485,11 +485,16 @@ button::after {
   font-weight: 600;
 }
 
-/* ==================== 双手柄 / 横屏布局 ==================== */
+/* ======================= 双手柄 / 扩展组件 ======================= */
+.joy-meta {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  flex-shrink: 0;
+}
 .angle-readout {
   display: flex;
   align-items: center;
-  gap: 12rpx;
   margin-top: 12rpx;
   font-size: 26rpx;
   color: #8b93a3;
@@ -498,6 +503,42 @@ button::after {
   color: #22d3ee;
   font-size: 32rpx;
   font-weight: 700;
+  margin-left: 10rpx;
+}
+
+/* 分区标签（真实节点，不依赖伪元素，兼容更多渲染内核） */
+.zone-label {
+  align-self: flex-start;
+  padding: 4rpx 18rpx;
+  border-radius: 999rpx;
+  background: rgba(34, 211, 238, 0.10);
+  border: 1rpx solid rgba(34, 211, 238, 0.3);
+  color: #22d3ee;
+  font-size: 20rpx;
+  font-weight: 600;
+  letter-spacing: 1rpx;
+  margin-bottom: 12rpx;
+}
+
+/* 摇杆轴向切换：360° 全向 / 仅转向 */
+.axis-switch {
+  display: flex;
+  background: #232730;
+  border-radius: 999rpx;
+  padding: 4rpx;
+  margin-top: 10rpx;
+}
+.axis-btn {
+  padding: 8rpx 20rpx;
+  border-radius: 999rpx;
+  font-size: 22rpx;
+  color: #8b93a3;
+  white-space: nowrap;
+}
+.axis-btn.active {
+  background: linear-gradient(135deg, #22d3ee, #3b82f6);
+  color: #04121a;
+  font-weight: 700;
 }
 
 /* 左手：只保留前进 / 后退 */
@@ -505,14 +546,16 @@ button::after {
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 20rpx;
 }
 .throttle-btn {
   width: 260rpx;
   height: 150rpx;
-  margin: 0;
+  margin: 0 0 20rpx;
   border-radius: 32rpx;
   font-size: 64rpx;
+}
+.throttle-btn:last-child {
+  margin-bottom: 0;
 }
 .throttle-btn.up {
   background: linear-gradient(135deg, rgba(34, 211, 238, 0.2), rgba(59, 130, 246, 0.2));
@@ -528,212 +571,310 @@ button::after {
   transform: scale(.94);
 }
 
-/* 双区：竖屏上下堆叠、横屏左右分列 */
+/* 双区：竖屏上下堆叠，横屏左右分列。不使用 flex:1 抢高度 */
 .app.dual .panel {
   display: flex;
   flex-direction: column;
+  align-items: stretch;
   min-height: 0;
 }
 .app.dual .pane {
-  flex: 1;
+  flex: 1 0 auto;
   min-width: 0;
   justify-content: center;
 }
-.app.wide.dual .panel {
-  flex-direction: row;
-  align-items: stretch;
+.app.dual .pane + .pane {
+  border-top: 1rpx solid rgba(255, 255, 255, 0.06);
+  padding-top: 20rpx;
 }
-.app.wide.dual .pane {
-  padding: 0 8px;
-}
+
+/* 「仅转向」模式：隐藏竖线、强化水平导轨 */
 .app.dual .joystick.steer-only .joystick-cross::before {
   display: none;
 }
 .app.dual .joystick.steer-only .joystick-cross::after {
   height: 2rpx;
-  background: rgba(34, 211, 238, 0.24);
+  left: 4%;
+  right: 4%;
+  background: rgba(34, 211, 238, 0.28);
 }
 
-/* 横屏：rpx 基准会按屏幕宽度放大近一倍，因此这一整段必须用 px */
+/* ==================================================================
+   横屏布局：全部使用 px（横屏时 rpx 基准按屏幕宽度会放大近一倍）。
+   关键约束：
+   1. 不设置 height / min-height 固定视口高度 —— 小程序 webview 对 100vh
+      的语义与原生导航栏叠加不稳定，会让 flex 子项被压缩；
+   2. panel 用 flex: 0 0 auto，高度由内容自然撑开；
+   3. pane 内所有子项 flex-shrink: 0，杜绝摇杆被压成椭圆；
+   4. 显式覆盖原生 button 的块级默认样式，避免按钮被拉伸。
+   ================================================================== */
 .app.wide {
-  height: 100vh;
   box-sizing: border-box;
-  padding: 6px 10px;
+  padding: 4px 8px 8px;
   display: flex;
   flex-direction: column;
 }
+
+/* 顶部：隐藏与微信原生导航栏重复的自定义品牌区 */
 .app.wide .topbar {
-  margin-bottom: 4px;
+  justify-content: flex-end;
+  margin-bottom: 2px;
+  flex-shrink: 0;
 }
-.app.wide .logo {
-  font-size: 18px;
-  margin-right: 6px;
-}
-.app.wide .title {
-  font-size: 14px;
-}
-.app.wide .sub {
-  font-size: 10px;
+.app.wide .brand {
+  display: none;
 }
 .app.wide .pill {
-  font-size: 11px;
-  padding: 3px 8px;
-  margin-right: 6px;
+  font-size: 10px;
+  padding: 2px 7px;
+  margin-right: 5px;
 }
 .app.wide .battery {
-  font-size: 11px;
-  min-width: 40px;
+  font-size: 10px;
+  min-width: 36px;
 }
+.app.wide .compat-note {
+  display: none;
+}
+
 .app.wide .connect-btn {
-  height: 32px;
-  line-height: 32px;
-  font-size: 13px;
+  height: 30px;
+  line-height: 30px;
+  font-size: 12px;
   border-radius: 8px;
   letter-spacing: 0;
 }
-.app.wide .compat-note {
-  margin-top: 2px;
-  font-size: 10px;
-}
 .app.wide .tabs {
   margin: 4px 0;
-  padding: 3px;
+  padding: 2px;
   border-radius: 8px;
+  flex-shrink: 0;
 }
 .app.wide .tab {
-  padding: 5px 0;
-  font-size: 12px;
+  padding: 4px 0;
+  font-size: 11px;
   border-radius: 6px;
 }
-.app.wide .panel {
-  flex: 1;
+
+/* 核心：高度由内容撑开，不参与父容器分配 */
+.app.wide .panel,
+.app.wide.dual .panel {
+  flex: 0 0 auto;
   min-height: 0;
+  align-items: stretch;
+}
+.app.wide.dual .panel {
+  flex-direction: row;
 }
 .app.wide .pane {
+  flex: 1 1 auto;
+  width: 100%;
+  min-width: 0;
+  box-sizing: border-box;
+  padding: 2px 6px;
   justify-content: center;
 }
-.app.wide .demo-note {
+.app.wide.dual .pane {
+  flex: 1 1 50%;
+  width: 50%;
+}
+.app.wide.dual .pane + .pane {
+  border-top: none;
+  border-left: 1px solid rgba(255, 255, 255, 0.07);
+  padding-top: 2px;
+}
+/* 禁止垂直收缩：这是摇杆被压扁、文字溢出盖住 tab/控制条的根因 */
+.app.wide .pane > view,
+.app.wide .pane > text,
+.app.wide .pane > button {
+  flex-shrink: 0;
+}
+.app.wide .demo-note,
+.app.wide .hint,
+.app.wide .foot {
   display: none;
 }
-.app.wide .hint {
-  margin-top: 4px;
-  font-size: 10px;
-  line-height: 1.35;
+.app.wide .zone-label {
+  font-size: 9px;
+  padding: 1px 7px;
+  margin-bottom: 3px;
+  letter-spacing: 0;
 }
 .app.wide .readout {
-  margin-top: 4px;
+  margin-top: 3px;
 }
 .app.wide .readout text {
-  font-size: 11px;
-  margin: 0 8px;
+  font-size: 10px;
+  margin: 0 10px;
+  white-space: nowrap;
 }
 .app.wide .dir-state {
   margin-top: 2px;
-  font-size: 11px;
+  font-size: 10px;
+  white-space: nowrap;
+}
+.app.wide .joy-meta {
+  flex-direction: row;
+  gap: 6px;
+  margin-top: 2px;
 }
 .app.wide .angle-readout {
-  margin-top: 3px;
-  font-size: 11px;
-  gap: 4px;
+  margin-top: 0;
+  font-size: 10px;
 }
 .app.wide .angle-val {
-  font-size: 13px;
+  font-size: 12px;
+  margin-left: 4px;
 }
+.app.wide .axis-switch {
+  margin-top: 0;
+  padding: 1px;
+}
+.app.wide .axis-btn {
+  padding: 2px 8px;
+  font-size: 9px;
+}
+
+/* 左手油门 */
+.app.wide .throttle-pad {
+  flex-shrink: 0;
+}
+.app.wide .dbtn.throttle-btn {
+  width: 128px;
+  height: 44px;
+  margin: 0 0 6px;
+  border-radius: 11px;
+  font-size: 21px;
+  flex-shrink: 0;
+}
+.app.wide .dbtn.throttle-btn:last-child {
+  margin-bottom: 0;
+}
+
+/* 右手摇杆：正圆 360°，knob 明显小于容器 */
+.app.wide .joystick {
+  width: 96px;
+  height: 96px;
+  flex-shrink: 0;
+}
+.app.wide .joystick-knob {
+  width: 34px;
+  height: 34px;
+  margin-left: -17px;
+  margin-top: -17px;
+}
+
+/* 单区模式横屏 */
+.app.wide .dpad,
+.app.wide .gravity-tilt,
+.app.wide .gravity-actions {
+  flex-shrink: 0;
+}
+.app.wide .dbtn {
+  width: 42px;
+  height: 42px;
+  margin: 2px;
+  border-radius: 10px;
+  font-size: 17px;
+  flex-shrink: 0;
+}
+.app.wide .dpad-cell {
+  width: 42px;
+  height: 42px;
+}
+.app.wide .gravity-tilt {
+  width: 92px;
+  height: 92px;
+  border-radius: 16px;
+}
+.app.wide .tilt-phone {
+  font-size: 28px;
+}
+
+/* 原生 button 默认块级样式显式归一，避免「关」「刷新电量」被拉宽 */
+.app.wide .connect-btn,
+.app.wide .toggle,
+.app.wide .mini-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: auto;
+  height: auto;
+  min-height: 0;
+  line-height: 1.2;
+  box-sizing: border-box;
+  flex: 0 0 auto;
+  margin: 0;
+}
+.app.wide .connect-btn {
+  width: 100%;
+  height: 30px;
+}
+
+/* 底部控制条：单行、不压缩 */
 .app.wide .controls {
+  flex-shrink: 0;
   margin-top: 4px;
-  padding: 5px 8px;
+  padding: 3px 6px;
   border-radius: 8px;
   flex-wrap: nowrap;
   align-items: center;
 }
 .app.wide .ctrl-item {
-  margin: 0 8px 0 0;
+  flex-shrink: 0;
+  margin: 0 6px 0 0;
   flex-direction: row;
   align-items: center;
 }
 .app.wide .ctrl-label {
-  margin-bottom: 0;
   font-size: 10px;
+  margin: 0 4px 0 0;
   white-space: nowrap;
 }
 .app.wide .toggle {
-  min-width: 38px;
-  padding: 3px 8px;
-  font-size: 11px;
+  min-width: 32px;
+  padding: 3px 7px;
+  font-size: 10px;
   border-radius: 6px;
 }
+.app.wide .gear {
+  padding: 2px;
+  flex-shrink: 0;
+}
 .app.wide .gear-btn {
-  padding: 3px 8px;
-  font-size: 11px;
+  padding: 3px 7px;
+  font-size: 10px;
+  border-radius: 5px;
 }
 .app.wide .mini-btn {
   padding: 4px 8px;
-  font-size: 11px;
-  margin: 0 4px;
+  font-size: 10px;
+  border-radius: 6px;
+  margin: 0 3px;
 }
 .app.wide .ctrl-item.wide {
-  flex: 1;
-  margin-right: 8px;
+  flex: 1 1 auto;
+  min-width: 0;
+  width: auto;
+  margin-right: 6px;
 }
 .app.wide .trim-slider {
-  flex: 1;
-  min-width: 60px;
+  flex: 1 1 auto;
+  min-width: 0;
+  width: 100%;
   margin: 0;
 }
 .app.wide .log-zone {
+  flex-shrink: 0;
   margin-top: 4px;
-  padding: 4px 8px;
+  padding: 3px 8px;
   border-radius: 8px;
 }
 .app.wide .log-head {
   display: none;
 }
 .app.wide .log {
-  height: 28px;
+  height: 16px;
   font-size: 9px;
-  line-height: 14px;
-}
-.app.wide .foot {
-  display: none;
-}
-
-/* 横屏控件用固定 px，避免 rpx 放大溢出 */
-.app.wide .dbtn {
-  width: 50px;
-  height: 50px;
-  margin: 3px;
-  border-radius: 12px;
-  font-size: 20px;
-}
-.app.wide .dpad-cell {
-  width: 50px;
-  height: 50px;
-}
-.app.wide .dbtn.throttle-btn {
-  width: 150px;
-  height: 60px;
-  margin: 0;
-  border-radius: 14px;
-  font-size: 24px;
-}
-.app.wide .throttle-pad {
-  gap: 8px;
-}
-.app.wide .joystick {
-  width: 150px;
-  height: 150px;
-}
-.app.wide .joystick-knob {
-  width: 50px;
-  height: 50px;
-  margin-left: -25px;
-  margin-top: -25px;
-}
-.app.wide .gravity-tilt {
-  width: 130px;
-  height: 130px;
-  border-radius: 20px;
-}
-.app.wide .tilt-phone {
-  font-size: 38px;
+  line-height: 13px;
 }
