@@ -484,3 +484,256 @@ button::after {
   color: #0f1115;
   font-weight: 600;
 }
+
+/* ==================== 双手柄 / 横屏布局 ==================== */
+.angle-readout {
+  display: flex;
+  align-items: center;
+  gap: 12rpx;
+  margin-top: 12rpx;
+  font-size: 26rpx;
+  color: #8b93a3;
+}
+.angle-val {
+  color: #22d3ee;
+  font-size: 32rpx;
+  font-weight: 700;
+}
+
+/* 左手：只保留前进 / 后退 */
+.throttle-pad {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 20rpx;
+}
+.throttle-btn {
+  width: 260rpx;
+  height: 150rpx;
+  margin: 0;
+  border-radius: 32rpx;
+  font-size: 64rpx;
+}
+.throttle-btn.up {
+  background: linear-gradient(135deg, rgba(34, 211, 238, 0.2), rgba(59, 130, 246, 0.2));
+  box-shadow: inset 0 0 0 2rpx rgba(34, 211, 238, 0.3), 0 12rpx 28rpx rgba(0, 0, 0, 0.35);
+}
+.throttle-btn.down {
+  background: linear-gradient(135deg, rgba(248, 113, 113, 0.16), rgba(59, 130, 246, 0.12));
+  box-shadow: inset 0 0 0 2rpx rgba(248, 113, 113, 0.25), 0 12rpx 28rpx rgba(0, 0, 0, 0.35);
+}
+.app.dual .dbtn.throttle-btn.held {
+  background: linear-gradient(135deg, #22d3ee, #3b82f6);
+  color: #04121a;
+  transform: scale(.94);
+}
+
+/* 双区：竖屏上下堆叠、横屏左右分列 */
+.app.dual .panel {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+}
+.app.dual .pane {
+  flex: 1;
+  min-width: 0;
+  justify-content: center;
+}
+.app.wide.dual .panel {
+  flex-direction: row;
+  align-items: stretch;
+}
+.app.wide.dual .pane {
+  padding: 0 8px;
+}
+.app.dual .joystick.steer-only .joystick-cross::before {
+  display: none;
+}
+.app.dual .joystick.steer-only .joystick-cross::after {
+  height: 2rpx;
+  background: rgba(34, 211, 238, 0.24);
+}
+
+/* 横屏：rpx 基准会按屏幕宽度放大近一倍，因此这一整段必须用 px */
+.app.wide {
+  height: 100vh;
+  box-sizing: border-box;
+  padding: 6px 10px;
+  display: flex;
+  flex-direction: column;
+}
+.app.wide .topbar {
+  margin-bottom: 4px;
+}
+.app.wide .logo {
+  font-size: 18px;
+  margin-right: 6px;
+}
+.app.wide .title {
+  font-size: 14px;
+}
+.app.wide .sub {
+  font-size: 10px;
+}
+.app.wide .pill {
+  font-size: 11px;
+  padding: 3px 8px;
+  margin-right: 6px;
+}
+.app.wide .battery {
+  font-size: 11px;
+  min-width: 40px;
+}
+.app.wide .connect-btn {
+  height: 32px;
+  line-height: 32px;
+  font-size: 13px;
+  border-radius: 8px;
+  letter-spacing: 0;
+}
+.app.wide .compat-note {
+  margin-top: 2px;
+  font-size: 10px;
+}
+.app.wide .tabs {
+  margin: 4px 0;
+  padding: 3px;
+  border-radius: 8px;
+}
+.app.wide .tab {
+  padding: 5px 0;
+  font-size: 12px;
+  border-radius: 6px;
+}
+.app.wide .panel {
+  flex: 1;
+  min-height: 0;
+}
+.app.wide .pane {
+  justify-content: center;
+}
+.app.wide .demo-note {
+  display: none;
+}
+.app.wide .hint {
+  margin-top: 4px;
+  font-size: 10px;
+  line-height: 1.35;
+}
+.app.wide .readout {
+  margin-top: 4px;
+}
+.app.wide .readout text {
+  font-size: 11px;
+  margin: 0 8px;
+}
+.app.wide .dir-state {
+  margin-top: 2px;
+  font-size: 11px;
+}
+.app.wide .angle-readout {
+  margin-top: 3px;
+  font-size: 11px;
+  gap: 4px;
+}
+.app.wide .angle-val {
+  font-size: 13px;
+}
+.app.wide .controls {
+  margin-top: 4px;
+  padding: 5px 8px;
+  border-radius: 8px;
+  flex-wrap: nowrap;
+  align-items: center;
+}
+.app.wide .ctrl-item {
+  margin: 0 8px 0 0;
+  flex-direction: row;
+  align-items: center;
+}
+.app.wide .ctrl-label {
+  margin-bottom: 0;
+  font-size: 10px;
+  white-space: nowrap;
+}
+.app.wide .toggle {
+  min-width: 38px;
+  padding: 3px 8px;
+  font-size: 11px;
+  border-radius: 6px;
+}
+.app.wide .gear-btn {
+  padding: 3px 8px;
+  font-size: 11px;
+}
+.app.wide .mini-btn {
+  padding: 4px 8px;
+  font-size: 11px;
+  margin: 0 4px;
+}
+.app.wide .ctrl-item.wide {
+  flex: 1;
+  margin-right: 8px;
+}
+.app.wide .trim-slider {
+  flex: 1;
+  min-width: 60px;
+  margin: 0;
+}
+.app.wide .log-zone {
+  margin-top: 4px;
+  padding: 4px 8px;
+  border-radius: 8px;
+}
+.app.wide .log-head {
+  display: none;
+}
+.app.wide .log {
+  height: 28px;
+  font-size: 9px;
+  line-height: 14px;
+}
+.app.wide .foot {
+  display: none;
+}
+
+/* 横屏控件用固定 px，避免 rpx 放大溢出 */
+.app.wide .dbtn {
+  width: 50px;
+  height: 50px;
+  margin: 3px;
+  border-radius: 12px;
+  font-size: 20px;
+}
+.app.wide .dpad-cell {
+  width: 50px;
+  height: 50px;
+}
+.app.wide .dbtn.throttle-btn {
+  width: 150px;
+  height: 60px;
+  margin: 0;
+  border-radius: 14px;
+  font-size: 24px;
+}
+.app.wide .throttle-pad {
+  gap: 8px;
+}
+.app.wide .joystick {
+  width: 150px;
+  height: 150px;
+}
+.app.wide .joystick-knob {
+  width: 50px;
+  height: 50px;
+  margin-left: -25px;
+  margin-top: -25px;
+}
+.app.wide .gravity-tilt {
+  width: 130px;
+  height: 130px;
+  border-radius: 20px;
+}
+.app.wide .tilt-phone {
+  font-size: 38px;
+}

@@ -155,3 +155,139 @@ input[type=range]{width:100%;accent-color:var(--accent)}
 .log .warn{color:var(--warn)}
 
 .foot{margin-top:auto;font-size:10px;color:#5b6373;text-align:center;line-height:1.5}
+
+/* ==================== 双手柄 / 横屏布局 ==================== */
+.stage-note,.angle-readout,.dual-hint{display:none}
+
+/* 双区模式：方向键 + 摇杆 两个面板同时渲染 */
+.app.dual .panel,.app.layout-wide .panel{
+  display:grid;grid-template-columns:1fr 1fr;gap:12px;min-height:0;position:relative;
+}
+.app.dual .mode-pane.active,.app.layout-wide .mode-pane.active{
+  display:flex;flex-direction:column;align-items:center;justify-content:center;min-height:0;
+}
+.app.dual .panel.single .mode-pane.active,
+.app.layout-wide .panel.single .mode-pane.active{grid-column:1/-1}
+.app.dual .mode-pane{position:relative}
+.app.dual .mode-pane[data-pane="dpad"]::before,
+.app.dual .mode-pane[data-pane="joystick"]::before{
+  position:absolute;top:0;left:10px;font-size:10px;letter-spacing:1px;
+  color:var(--muted);opacity:.7;pointer-events:none;
+}
+.app.dual .mode-pane[data-pane="dpad"]::before{content:"L · 油门"}
+.app.dual .mode-pane[data-pane="joystick"]::before{content:"R · 转向";left:auto;right:10px}
+
+/* 左手：方向键只保留前进 / 后退（松开即停） */
+.app.dual .dpad.throttle-only{display:flex;flex-direction:column;align-items:center;gap:10px}
+.app.dual .dpad.throttle-only .dpad-row{display:contents}
+.app.dual .dpad.throttle-only .dpad-cell,
+.app.dual .dpad.throttle-only .dbtn.left,
+.app.dual .dpad.throttle-only .dbtn.right,
+.app.dual .dpad.throttle-only .dbtn.stop{display:none}
+.app.dual .dpad.throttle-only .dbtn{
+  width:min(30vw,132px);height:min(16vh,82px);border-radius:18px;font-size:26px;
+}
+.app.dual .dpad.throttle-only .dbtn.up{
+  background:linear-gradient(135deg,rgba(34,211,238,.20),rgba(59,130,246,.20));
+  box-shadow:inset 0 0 0 1px rgba(34,211,238,.25),var(--shadow);
+}
+.app.dual .dpad.throttle-only .dbtn.down{
+  background:linear-gradient(135deg,rgba(248,113,113,.16),rgba(59,130,246,.12));
+  box-shadow:inset 0 0 0 1px rgba(248,113,113,.22),var(--shadow);
+}
+.app.dual .dual-hint{display:block}
+.app.dual .mode-pane.active .hint:not(.dual-hint){display:none}
+
+/* 右手：摇杆锁为水平单轴，只输出转向角 */
+.app.dual .joystick .joystick-cross::before{display:none}
+.app.dual .joystick .joystick-cross::after{
+  height:2px;top:50%;left:6%;right:6%;background:rgba(34,211,238,.24);
+}
+.app.dual .angle-readout{
+  display:block;margin-top:6px;font-size:12px;color:var(--muted);letter-spacing:.5px;
+}
+.app.dual .angle-readout b{color:var(--accent);font-size:15px;font-variant-numeric:tabular-nums}
+
+@media (max-width:700px) and (orientation:portrait){
+  /* 竖屏双手柄：上下堆叠，仍可用 */
+  .app.dual .panel{grid-template-columns:1fr;gap:10px}
+  .app.dual .dpad.throttle-only .dbtn{width:132px;height:64px}
+  .app.dual .joystick{width:190px;height:190px}
+}
+
+/* 横屏 / 宽屏骨架：整屏不滚动，顶部紧凑、中部双区、底部控制条 */
+@media (min-width:701px),(orientation:landscape) and (max-height:620px){
+  .app.layout-wide{
+    max-width:none;width:100%;height:100dvh;min-height:0;margin:0;
+    padding:8px 14px calc(8px + env(safe-area-inset-bottom));
+    display:grid;gap:8px 12px;overflow:hidden;
+    grid-template-columns:minmax(210px,.85fr) minmax(0,1.15fr);
+    grid-template-rows:auto auto minmax(0,1fr) minmax(54px,auto);
+    grid-template-areas:
+      "top      top"
+      "connect  tabs"
+      "stage    stage"
+      "controls log";
+  }
+  .app.layout-wide .topbar{grid-area:top;min-height:32px}
+  .app.layout-wide .logo{font-size:21px}
+  .app.layout-wide .brand-text h1{font-size:15px}
+  .app.layout-wide .sub{font-size:10px}
+  .app.layout-wide .connect-zone{grid-area:connect}
+  .app.layout-wide .connect-btn{padding:9px 12px;font-size:13px;letter-spacing:0;border-radius:10px}
+  .app.layout-wide .compat-note{font-size:10px;text-align:left}
+  .app.layout-wide .tabs{grid-area:tabs;align-self:center;gap:4px;padding:4px;border-radius:10px}
+  .app.layout-wide .tab{padding:7px 4px;font-size:12px;border-radius:8px}
+  .app.layout-wide .panel{grid-area:stage}
+  .app.layout-wide .controls{
+    grid-area:controls;flex-wrap:nowrap;align-items:center;gap:10px;
+    padding:8px 10px;border-radius:10px;overflow:hidden;
+  }
+  .app.layout-wide .ctrl-item{gap:3px}
+  .app.layout-wide .ctrl-item.wide{flex:1 1 auto;min-width:80px}
+  .app.layout-wide .ctrl-label{font-size:10px}
+  .app.layout-wide .toggle{padding:5px 10px;min-width:44px;font-size:12px;border-radius:8px}
+  .app.layout-wide .gear button{padding:4px 8px;font-size:11px}
+  .app.layout-wide .mini-btn{padding:5px 9px;font-size:11px;border-radius:8px}
+  .app.layout-wide input[type=range]{height:16px}
+  .app.layout-wide .log-zone{
+    grid-area:log;padding:6px 10px;border-radius:10px;min-width:0;
+    display:flex;flex-direction:column;
+  }
+  .app.layout-wide .log-head{margin-bottom:2px}
+  .app.layout-wide .log{height:42px;font-size:10px;line-height:1.45}
+  .app.layout-wide .foot{display:none}
+
+  .app.layout-wide .stage-note{
+    display:block;position:absolute;top:1px;left:50%;transform:translateX(-50%);
+    font-size:10px;color:var(--muted);white-space:nowrap;opacity:.8;
+    pointer-events:none;z-index:2;
+  }
+  .app.layout-wide.dual .panel::after{
+    content:"";position:absolute;left:50%;top:10%;bottom:10%;width:1px;
+    background:linear-gradient(180deg,transparent,rgba(34,211,238,.35),transparent);
+    pointer-events:none;
+  }
+
+  /* 横屏紧凑尺寸：按视口高度缩放，控制区一屏放得下 */
+  .app.layout-wide .dbtn{
+    width:min(8.4vh,62px);height:min(8.4vh,62px);
+    border-radius:14px;font-size:20px;
+  }
+  .app.layout-wide .dpad{gap:5px;margin:0}
+  .app.layout-wide .dpad-row{gap:5px}
+  .app.layout-wide .dpad.throttle-only .dbtn{
+    width:min(26vw,140px);height:min(15vh,76px);border-radius:16px;font-size:24px;
+  }
+  .app.layout-wide .joystick{width:min(34vh,170px);height:min(34vh,170px);margin:0}
+  .app.layout-wide .joystick-knob{width:56px;height:56px}
+  .app.layout-wide .demo-note{display:none}
+  .app.layout-wide .hint{margin-top:4px;font-size:10px;line-height:1.35}
+  .app.layout-wide .readout{margin-top:4px;gap:12px;font-size:11px}
+  .app.layout-wide .dir-state{margin-top:2px;font-size:11px}
+  .app.layout-wide .angle-readout{margin-top:4px;font-size:11px}
+  .app.layout-wide .angle-readout b{font-size:13px}
+  .app.layout-wide .gravity-tilt{width:min(32vh,145px);height:min(32vh,145px);margin:0}
+  .app.layout-wide .tilt-phone{font-size:38px}
+  .app.layout-wide .gravity-actions{margin-top:4px}
+}

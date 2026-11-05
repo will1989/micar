@@ -35,7 +35,8 @@
 
   <!-- 模式切换 -->
   <nav class="tabs" id="tabs" hidden>
-    <button class="tab active" data-mode="dpad">方向键</button>
+    <button class="tab active" data-mode="gamepad">双手柄</button>
+    <button class="tab" data-mode="dpad">方向键</button>
     <button class="tab" data-mode="joystick">摇杆</button>
     <button class="tab" data-mode="gravity">重力</button>
   </nav>
@@ -43,10 +44,12 @@
   <!-- 控制面板 -->
   <main class="panel" id="panel" hidden>
 
+    <div class="stage-note" id="stageNote">双手柄 · 两侧可同时操作</div>
+
     <!-- 方向键 -->
     <div class="mode-pane active" data-pane="dpad">
       <p class="demo-note">未连接小车 · 操作演示（指令不会下发）</p>
-      <div class="dpad">
+      <div class="dpad" id="dpad">
         <div class="dpad-row">
           <span></span>
           <button class="dbtn up" data-cmd="forward">▲</button>
@@ -69,6 +72,7 @@
       </div>
       <div class="dir-state" id="dirState">待命 · 按住方向键</div>
       <p class="hint">按住方向键行驶，松开自动回中停车。中间 ● 立即停车。</p>
+      <p class="hint dual-hint">左手油门：按住前进 / 后退，松开即停；转向交给右侧摇杆</p>
     </div>
 
     <!-- 摇杆 -->
@@ -78,12 +82,14 @@
         <div class="joystick-knob" id="joyKnob"></div>
         <div class="joystick-cross"></div>
       </div>
+      <div class="angle-readout" id="angleReadout">转向角 <b id="angleVal">0°</b></div>
       <div class="readout">
         <span>转向 <b id="jsSteer">1000</b></span>
         <span>油门 <b id="jsThrottle">1000</b></span>
       </div>
       <div class="dir-state" id="joyState">待命 · 按住摇杆拖动</div>
       <p class="hint">拖动摇杆：上下控制油门，左右控制转向。松手回中。</p>
+      <p class="hint dual-hint">右手转向：左右拖动控制转向角，松手自动回正；油门交给左侧方向键</p>
     </div>
 
     <!-- 重力感应 -->

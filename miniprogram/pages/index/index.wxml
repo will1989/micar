@@ -1,4 +1,4 @@
-<view class="app">
+<view class="app {{wide ? 'wide' : ''}} {{mode == 'gamepad' ? 'dual' : ''}}">
 
   <view class="topbar">
     <view class="brand">
@@ -22,6 +22,7 @@
   <text class="compat-note" wx:if="{{compatNote}}">{{compatNote}}</text>
 
   <view class="tabs">
+    <view class="tab {{mode == 'gamepad' ? 'active' : ''}}" data-mode="gamepad" bindtap="onModeTap">双手柄</view>
     <view class="tab {{mode == 'dpad' ? 'active' : ''}}" data-mode="dpad" bindtap="onModeTap">方向键</view>
     <view class="tab {{mode == 'joystick' ? 'active' : ''}}" data-mode="joystick" bindtap="onModeTap">摇杆</view>
     <view class="tab {{mode == 'gravity' ? 'active' : ''}}" data-mode="gravity" bindtap="onModeTap">重力</view>
@@ -29,9 +30,16 @@
 
   <view class="panel">
 
-    <view class="pane" wx:if="{{mode == 'dpad'}}">
+    <view class="pane" wx:if="{{mode == 'dpad' || mode == 'gamepad'}}">
       <view class="demo-note" wx:if="{{!connected}}">未连接小车 · 操作演示（指令不会下发）</view>
-      <view class="dpad">
+
+      <!-- 双手柄只保留前进 / 后退（左手油门）；wx:else 的单区模式保留完整四向作为备用 -->
+      <view class="dpad throttle-pad" wx:if="{{mode == 'gamepad'}}">
+        <view class="dbtn throttle-btn up {{activeDir == 'forward' ? 'held' : ''}}" data-cmd="forward" bindtouchstart="onDirStart" bindtouchend="onDirEnd" bindtouchcancel="onDirEnd">▲</view>
+        <view class="dbtn throttle-btn down {{activeDir == 'backward' ? 'held' : ''}}" data-cmd="backward" bindtouchstart="onDirStart" bindtouchend="onDirEnd" bindtouchcancel="onDirEnd">▼</view>
+      </view>
+
+      <view class="dpad" wx:else>
         <view class="dpad-row">
           <view class="dpad-cell"></view>
           <view class="dbtn {{activeDir == 'forward' ? 'held' : ''}}" data-cmd="forward" bindtouchstart="onDirStart" bindtouchend="onDirEnd" bindtouchcancel="onDirEnd">▲</view>
@@ -48,26 +56,30 @@
           <view class="dpad-cell"></view>
         </view>
       </view>
+
       <view class="readout">
         <text>转向 {{steerReadout}}</text>
         <text>油门 {{throttleReadout}}</text>
       </view>
-      <view class="dir-state {{activeDir ? 'on' : ''}}">{{activeDir ? dirLabel : '待命 · 按住方向键'}}</view>
-      <text class="hint">按住方向键行驶，松开自动回中停车；中间 ● 立即停车</text>
+      <view class="dir-state {{activeDir ? 'on' : ''}}">{{activeDir ? dirLabel : idleDirText}}</view>
+      <text class="hint" wx:if="{{mode != 'gamepad'}}">按住方向键行驶，松开自动回中停车；中间 ● 立即停车</text>
+      <text class="hint" wx:if="{{mode == 'gamepad'}}">左手油门：按住前进 / 后退，松开即停；转向交给右侧摇杆</text>
     </view>
 
-    <view class="pane" wx:if="{{mode == 'joystick'}}">
+    <view class="pane" wx:if="{{mode == 'joystick' || mode == 'gamepad'}}">
       <view class="demo-note" wx:if="{{!connected}}">未连接小车 · 操作演示（指令不会下发）</view>
-      <view id="joystick" class="joystick {{joyPressed ? 'active' : ''}}" catchtouchstart="onJoyStart" catchtouchmove="onJoyMove" catchtouchend="onJoyEnd" catchtouchcancel="onJoyEnd">
+      <view id="joystick" class="joystick {{joyPressed ? 'active' : ''}} {{mode == 'gamepad' ? 'steer-only' : ''}}" catchtouchstart="onJoyStart" catchtouchmove="onJoyMove" catchtouchend="onJoyEnd" catchtouchcancel="onJoyEnd">
         <view class="joystick-cross"></view>
         <view class="joystick-knob {{joyPressed ? 'active' : ''}}" style="transform: translate({{joyX}}px, {{joyY}}px)"></view>
       </view>
+      <view class="angle-readout" wx:if="{{mode == 'gamepad'}}">转向角 <text class="angle-val">{{angleText}}</text></view>
       <view class="readout">
         <text>转向 {{steerReadout}}</text>
         <text>油门 {{throttleReadout}}</text>
       </view>
-      <view class="dir-state {{joyPressed ? 'on' : ''}}">{{joyPressed ? '拖动中 · 实时跟随' : '待命 · 按住摇杆拖动'}}</view>
-      <text class="hint">拖动摇杆：上下控制油门，左右控制转向；松手回中</text>
+      <view class="dir-state {{joyPressed ? 'on' : ''}}">{{joyPressed ? joyActiveText : idleJoyText}}</view>
+      <text class="hint" wx:if="{{mode != 'gamepad'}}">拖动摇杆：上下控制油门，左右控制转向；松手回中</text>
+      <text class="hint" wx:if="{{mode == 'gamepad'}}">右手转向：左右拖动控制转向角，松手自动回正；油门交给左侧方向键</text>
     </view>
 
     <view class="pane" wx:if="{{mode == 'gravity'}}">
@@ -105,7 +117,7 @@
     </view>
     <view class="ctrl-item wide">
       <text class="ctrl-label">转向微调 {{trim}}</text>
-      <slider min="-300" max="300" step="10" value="{{trim}}" activeColor="#22d3ee" block-size="20" bindchange="onTrimChange" bindchanging="onTrimChange" />
+      <slider class="trim-slider" min="-300" max="300" step="10" value="{{trim}}" activeColor="#22d3ee" block-size="20" bindchange="onTrimChange" bindchanging="onTrimChange" />
     </view>
     <view class="ctrl-item">
       <button class="mini-btn" bindtap="onBatteryTap">刷新电量</button>

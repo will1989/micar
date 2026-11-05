@@ -1,4 +1,5 @@
 {
   "navigationBarTitleText": "MiCar 遥控",
+  "pageOrientation": "auto",
   "usingComponents": {}
 }

@@ -2,6 +2,9 @@
  * 协议逆向参考：Matt Cree — https://mattcree.github.io/hardware/2026/01/07/reverse-engineering-xiaomi-jimny-ble-protocol.html
  * 控制包 = 3 字节：steering(12bit) + throttle(12bit)，1000 为居中/停止。
  * 注：高低速档位为 UI 端功率限制器（原厂高速/低速协议未公开）。
+ *
+ * 双手柄模式（横屏默认）：左手方向键只管油门(前/后)，右手摇杆锁水平单轴只管转向角。
+ * 两个输入分量正交，天然支持双手同时操作，互不覆盖。
  */
 (() => {
   'use strict';
@@ -25,7 +28,10 @@
 
   const CENTER = 1000, MIN = 0, MAX = 2000;
   const SEND_INTERVAL = 50; // 约 20Hz 保活
+  const MAX_ANGLE = 30;     // 转向角显示范围 ±30°
   const clamp = (v, lo, hi) => Math.max(lo, Math.min(hi, v));
+  // CSS 的横屏媒体查询必须与这里完全一致
+  const WIDE_MQ = '(min-width:701px),(orientation:landscape) and (max-height:620px)';
 
   // ---- 状态 ----
   const S = {
@@ -35,9 +41,12 @@
     lightsOn: false,
     gear: 1.0,
     trim: 0,
-    targetSteering: CENTER,
-    targetThrottle: CENTER,
-    mode: 'dpad',
+    // 两个正交输入分量：方向键写 throttle，摇杆写 steering（双手柄模式）
+    steerInput: CENTER,
+    throttleInput: CENTER,
+    mode: 'gamepad',
+    wide: false,
+    modeLocked: false,
     sendTimer: null,
     gravityCalib: null,
     gravityHandler: null,
@@ -46,6 +55,7 @@
   // ---- DOM ----
   const $ = (s) => document.querySelector(s);
   const els = {
+    app: $('.app'),
     connectBtn: $('#connectBtn'),
     compatNote: $('#compatNote'),
     statusPill: $('#statusPill'),
@@ -62,12 +72,14 @@
     trimVal: $('#trimVal'),
     batteryBtn: $('#batteryBtn'),
     clearLog: $('#clearLog'),
+    dpad: $('#dpad'),
     joystick: $('#joystick'),
     joyKnob: $('#joyKnob'),
     jsSteer: $('#jsSteer'),
     jsThrottle: $('#jsThrottle'),
     dpSteer: $('#dpSteer'),
     dpThrottle: $('#dpThrottle'),
+    angleVal: $('#angleVal'),
     dirState: $('#dirState'),
     joyState: $('#joyState'),
     gravityTilt: $('#gravityTilt'),
@@ -106,10 +118,44 @@
     return new Uint8Array([b0, b1, b2]);
   }
 
-  // 实际发送时叠加转向微调
+  // 实际下发值：统一叠加转向微调与档位功率限制（所有输入源共用）
   function currentTargets() {
-    const steer = clamp(S.targetSteering + S.trim, MIN, MAX);
-    return [steer, S.targetThrottle];
+    const steer = clamp(Math.round(S.steerInput + S.trim), MIN, MAX);
+    const thr = clamp(Math.round(CENTER + (S.throttleInput - CENTER) * S.gear), MIN, MAX);
+    return [steer, thr];
+  }
+
+  // 所有读数都反映"实际下发的指令"，三个面板数值始终一致
+  function syncAllReadouts() {
+    const [s, t] = currentTargets();
+    els.dpSteer.textContent = s;
+    els.dpThrottle.textContent = t;
+    els.jsSteer.textContent = s;
+    els.jsThrottle.textContent = t;
+    els.grSteer.textContent = s;
+    els.grThrottle.textContent = t;
+    const deg = Math.round((s - CENTER) / (MAX - CENTER) * MAX_ANGLE);
+    els.angleVal.textContent = (deg > 0 ? '+' : '') + deg + '°';
+  }
+
+  function resetNeutral() {
+    S.steerInput = CENTER;
+    S.throttleInput = CENTER;
+    syncAllReadouts();
+  }
+  function resetThrottle() {
+    S.throttleInput = CENTER;
+    syncAllReadouts();
+  }
+  function resetSteer() {
+    S.steerInput = CENTER;
+    syncAllReadouts();
+  }
+  function idleLabel(which) {
+    if (S.mode === 'gamepad') {
+      return which === 'dir' ? '待命 · 按住前进 / 后退' : '待命 · 左右拖动转向';
+    }
+    return which === 'dir' ? '待命 · 按住方向键' : '待命 · 按住摇杆拖动';
   }
 
   // ---- 发送循环（保活）----
@@ -237,37 +283,31 @@
     els.deviceName.textContent = 'WebBLE · 小米吉姆尼';
     log('🔌 已断开', 'warn');
     stopGravity();
+    resetNeutral();
     els.gravityLabel.textContent = '未校准';
   }
 
   // ---- 方向键 ----
   const DIR_LABEL = { forward: '前进', backward: '后退', left: '左转', right: '右转', stop: '停车' };
 
-  function syncDpadReadout() {
-    els.dpSteer.textContent = Math.round(S.targetSteering + S.trim);
-    els.dpThrottle.textContent = Math.round(S.targetThrottle);
-  }
-
   // 操作反馈与连接状态解耦：未连接时同样显示按下态与读数，仅不下发指令
   function applyDir(cmd) {
-    const g = S.gear;
-    const fwd = CENTER + (MAX - CENTER) * g;
-    const rev = CENTER - (MAX - CENTER) * g;
-    switch (cmd) {
-      case 'forward':  S.targetThrottle = fwd;        S.targetSteering = CENTER; break;
-      case 'backward': S.targetThrottle = rev;        S.targetSteering = CENTER; break;
-      case 'left':     S.targetSteering = MIN;        S.targetThrottle = CENTER; break;
-      case 'right':    S.targetSteering = MAX;        S.targetThrottle = CENTER; break;
-      case 'stop':     S.targetThrottle = CENTER;     S.targetSteering = CENTER; break;
+    if (S.mode === 'gamepad') {
+      // 左手只负责油门，转向完全交给右侧摇杆
+      if (cmd === 'forward') S.throttleInput = MAX;
+      else if (cmd === 'backward') S.throttleInput = MIN;
+      else S.throttleInput = CENTER;
+    } else {
+      switch (cmd) {
+        case 'forward':  S.throttleInput = MAX;     S.steerInput = CENTER; break;
+        case 'backward': S.throttleInput = MIN;     S.steerInput = CENTER; break;
+        case 'left':     S.steerInput = MIN;        S.throttleInput = CENTER; break;
+        case 'right':    S.steerInput = MAX;        S.throttleInput = CENTER; break;
+        case 'stop':     S.throttleInput = CENTER;  S.steerInput = CENTER; break;
+      }
     }
-    syncDpadReadout();
+    syncAllReadouts();
     if (!S.connected) log('⚠️ 演示：' + (DIR_LABEL[cmd] || cmd) + '（未连接小车，指令未下发）', 'warn');
-  }
-
-  function resetNeutral() {
-    S.targetThrottle = CENTER;
-    S.targetSteering = CENTER;
-    syncDpadReadout();
   }
 
   function bindDpad() {
@@ -282,12 +322,13 @@
         applyDir(btn.dataset.cmd);
       });
       const release = () => {
-        resetNeutral();
+        // 双区模式只回中自己这一侧，另一侧（摇杆）指令保持不变
+        if (S.mode === 'gamepad') resetThrottle(); else resetNeutral();
         // 指令立即回中，高亮延迟熄灭：鼠标快速单击也能看到明确的"按到了"反馈
         if (releaseTimer) clearTimeout(releaseTimer);
         releaseTimer = setTimeout(() => {
           btn.classList.remove('held');
-          els.dirState.textContent = '待命 · 按住方向键';
+          els.dirState.textContent = idleLabel('dir');
           els.dirState.classList.remove('on');
           releaseTimer = null;
         }, 240);
@@ -296,10 +337,8 @@
       btn.addEventListener('pointercancel', release);
       btn.addEventListener('pointerleave', () => { if (btn.classList.contains('held')) release(); });
     });
-    // 全局兜底：任意抬起都回中，避免漏掉 pointerup
-    window.addEventListener('pointerup', resetNeutral);
-    window.addEventListener('pointercancel', resetNeutral);
-    // 注：● 停车键已在上面的 .dbtn 循环里绑定 pointerdown/up，无需再按 id 单独绑定
+    // 注：不再做全局 pointerup 兜底 —— 双区模式下一侧松手不能清掉另一侧指令。
+    // ● 停车键已在上面的 .dbtn 循环里绑定 pointerdown/up，无需再按 id 单独绑定。
   }
 
   // ---- 摇杆 ----
@@ -312,28 +351,27 @@
       const r = j.getBoundingClientRect();
       const cx = r.left + r.width / 2, cy = r.top + r.height / 2;
       let dx = clientX - cx, dy = clientY - cy;
+      // 双手柄模式：锁成水平单轴，垂直位移不参与计算也不移动 knob
+      if (S.mode === 'gamepad') dy = 0;
       const max = r.width / 2;
       const dist = Math.hypot(dx, dy);
       if (dist > max) { dx = dx / dist * max; dy = dy / dist * max; }
       setKnob(dx, dy);
       const nx = clamp(dx / max, -1, 1);
       const ny = clamp(dy / max, -1, 1);
-      S.targetSteering = CENTER + nx * (MAX - CENTER);
-      S.targetThrottle = CENTER - ny * (MAX - CENTER) * S.gear;
-      els.jsSteer.textContent = Math.round(S.targetSteering + S.trim);
-      els.jsThrottle.textContent = Math.round(S.targetThrottle);
+      S.steerInput = CENTER + nx * (MAX - CENTER);
+      if (S.mode !== 'gamepad') S.throttleInput = CENTER - ny * (MAX - CENTER);
+      syncAllReadouts();
     };
     const end = () => {
       active = false;
       setKnob(0, 0);
-      resetNeutral();
-      els.jsSteer.textContent = '1000';
-      els.jsThrottle.textContent = '1000';
+      if (S.mode === 'gamepad') resetSteer(); else resetNeutral();
       if (releaseTimer) clearTimeout(releaseTimer);
       releaseTimer = setTimeout(() => {
         j.classList.remove('active');
         els.joyKnob.classList.remove('active');
-        els.joyState.textContent = '待命 · 按住摇杆拖动';
+        els.joyState.textContent = idleLabel('joy');
         els.joyState.classList.remove('on');
         releaseTimer = null;
       }, 240);
@@ -344,7 +382,7 @@
       active = true;
       j.classList.add('active');
       els.joyKnob.classList.add('active');
-      els.joyState.textContent = '拖动中 · 实时跟随';
+      els.joyState.textContent = S.mode === 'gamepad' ? '转向中 · 实时跟随' : '拖动中 · 实时跟随';
       els.joyState.classList.add('on');
       if (!S.connected) log('⚠️ 演示：摇杆可拖动，但未连接小车，指令未下发', 'warn');
       try { j.setPointerCapture(e.pointerId); } catch (err) { /* 部分浏览器不支持 */ }
@@ -402,10 +440,9 @@
       const dead = 0.08;
       const sx = Math.abs(nx) < dead ? 0 : nx;
       const sy = Math.abs(ny) < dead ? 0 : ny;
-      S.targetSteering = CENTER + sx * (MAX - CENTER);
-      S.targetThrottle = CENTER - sy * (MAX - CENTER) * S.gear;
-      els.grSteer.textContent = Math.round(S.targetSteering + S.trim);
-      els.grThrottle.textContent = Math.round(S.targetThrottle);
+      S.steerInput = CENTER + sx * (MAX - CENTER);
+      S.throttleInput = CENTER - sy * (MAX - CENTER);
+      syncAllReadouts();
       // 视觉反馈
       els.gravityTilt.querySelector('.tilt-phone').style.transform =
         `rotate(${clamp(dg,-40,40)}deg) rotateX(${clamp(db,-40,40)}deg)`;
@@ -428,20 +465,53 @@
     } catch (e) { log('灯光控制失败: ' + e.message, 'err'); S.lightsOn = !S.lightsOn; }
   }
 
-  // ---- 模式切换 ----
+  // ---- 模式与布局 ----
+  function isWide() { return window.matchMedia(WIDE_MQ).matches; }
+
+  function applyLayout() {
+    S.wide = isWide();
+    els.app.classList.toggle('layout-wide', S.wide);
+  }
+
+  function applyMode(mode, fromUser) {
+    if (fromUser) S.modeLocked = true;
+    S.mode = mode;
+    const dual = mode === 'gamepad';
+
+    els.tabs.querySelectorAll('.tab').forEach((t) => t.classList.toggle('active', t.dataset.mode === mode));
+    els.panel.querySelectorAll('.mode-pane').forEach((p) => {
+      const pane = p.dataset.pane;
+      const on = (pane === 'dpad' && (mode === 'dpad' || dual)) ||
+                 (pane === 'joystick' && (mode === 'joystick' || dual)) ||
+                 (pane === 'gravity' && mode === 'gravity');
+      p.classList.toggle('active', on);
+    });
+
+    els.app.classList.toggle('dual', dual);
+    els.panel.classList.toggle('single', !dual);
+    els.dpad.classList.toggle('throttle-only', dual);
+    if (mode !== 'gravity') stopGravity();
+    resetNeutral();
+    els.dirState.textContent = idleLabel('dir');
+    els.joyState.textContent = idleLabel('joy');
+  }
+
   function bindTabs() {
     els.tabs.querySelectorAll('.tab').forEach((tab) => {
-      tab.addEventListener('click', () => {
-        const mode = tab.dataset.mode;
-        S.mode = mode;
-        els.tabs.querySelectorAll('.tab').forEach((t) => t.classList.toggle('active', t === tab));
-        els.panel.querySelectorAll('.mode-pane').forEach((p) => p.classList.toggle('active', p.dataset.pane === mode));
-        // 离开重力模式时停掉传感器，避免它在后台持续覆盖其它模式的转向/油门指令
-        if (mode !== 'gravity') stopGravity();
-        // 切换模式时回中，避免残留指令
-        resetNeutral();
-      });
+      tab.addEventListener('click', () => applyMode(tab.dataset.mode, true));
     });
+  }
+
+  function bindViewport() {
+    const mq = window.matchMedia(WIDE_MQ);
+    const onChange = () => {
+      applyLayout();
+      // 用户手动选过模式后不再自动覆盖
+      if (!S.modeLocked) applyMode(S.wide ? 'gamepad' : 'dpad', false);
+    };
+    if (mq.addEventListener) mq.addEventListener('change', onChange);
+    else if (mq.addListener) mq.addListener(onChange);
+    window.addEventListener('orientationchange', () => setTimeout(onChange, 150));
   }
 
   // ---- 杂项绑定 ----
@@ -456,14 +526,16 @@
       b.addEventListener('click', () => {
         S.gear = parseFloat(b.dataset.gear);
         els.gear.querySelectorAll('button').forEach((x) => x.classList.toggle('active', x === b));
+        syncAllReadouts();
         log('档位: ' + b.textContent + ' (功率 ' + Math.round(S.gear * 100) + '%)');
       });
     });
     els.trim.addEventListener('input', () => {
       S.trim = parseInt(els.trim.value, 10);
       els.trimVal.textContent = S.trim;
+      syncAllReadouts();
     });
-    // 切到后台时回中，防止失控
+    // 切到后台时全部回中，防止失控
     document.addEventListener('visibilitychange', () => { if (document.hidden) resetNeutral(); });
   }
 
@@ -507,11 +579,14 @@
     // 面板默认可见：未连接时也能试操作（演示模式），不必先连真车
     [els.tabs, els.panel, els.controls, els.logZone].forEach((e) => { if (e) e.hidden = false; });
 
-    safe('模式切换', bindTabs);   // 优先绑定，保证 tab 永远可切换
+    safe('布局', () => { applyLayout(); bindViewport(); });
+    safe('模式切换', bindTabs);
     safe('方向键', bindDpad);
     safe('摇杆', bindJoystick);
     safe('重力', bindGravity);
     safe('其他控件', bindMisc);
+    // 横屏/宽屏默认双手柄，竖屏默认单区方向键
+    safe('初始模式', () => applyMode(S.wide ? 'gamepad' : 'dpad', false));
     log('就绪。点击「连接小车」并选择 JimnygreenSNxxxx。');
   }
 

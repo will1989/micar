@@ -4,6 +4,7 @@ var ble = require('../../utils/jimny-ble.js');
 var CENTER = ble.CENTER;
 var MIN = ble.MIN;
 var MAX = ble.MAX;
+var MAX_ANGLE = 30;
 
 function clamp(v, lo, hi) {
   return Math.max(lo, Math.min(hi, v));
@@ -30,13 +31,18 @@ Page({
     statusText: '未连接',
     deviceName: '小米吉姆尼 · BLE',
     battery: '--%',
-    mode: 'dpad',
+    mode: 'gamepad',
+    wide: false,
     lightsOn: false,
     gear: 1,
     trim: 0,
     activeDir: '',
     steerReadout: CENTER,
     throttleReadout: CENTER,
+    angleText: '0°',
+    idleDirText: '待命 · 按住前进 / 后退',
+    idleJoyText: '待命 · 左右拖动转向',
+    joyActiveText: '转向中 · 实时跟随',
     joyX: 0,
     joyY: 0,
     tiltX: 0,
@@ -56,6 +62,10 @@ Page({
     this.joyRect = null;
     this.joyActive = false;
     this.gravityBase = null;
+    this.modeLocked = false;
+    // 两个正交输入分量：方向键写 throttle，摇杆写 steering（双手柄模式互不覆盖）
+    this.steerVal = CENTER;
+    this.throttleVal = CENTER;
     this._privacyResolve = null;
     this._privacyHandler = null;
     this._accelHandler = function (res) {
@@ -74,6 +84,11 @@ Page({
       };
       wx.onNeedPrivacyAuthorization(this._privacyHandler);
     }
+
+    var info = typeof wx.getWindowInfo === 'function' ? wx.getWindowInfo() : wx.getSystemInfoSync();
+    var wide = info.windowWidth >= 700 || (info.windowWidth > info.windowHeight && info.windowWidth >= 560);
+    this.setData({ wide: wide });
+    this.setMode(wide ? 'gamepad' : 'dpad', false);
     this.appendLog('就绪。点击「连接小车」搜索 JimnygreenSNxxxx。');
   },
 
@@ -88,8 +103,22 @@ Page({
   },
 
   onHide: function () {
-    ble.setTargets({ steering: CENTER, throttle: CENTER });
+    this.applyInputs({ steering: CENTER, throttle: CENTER });
     this.stopGravity();
+  },
+
+  // 横屏切换：pageOrientation=auto 时触发，重新计算布局并重新测量摇杆中心
+  onResize: function (size) {
+    var box = size && (size.size || size);
+    var w = Number(box && box.windowWidth) || 0;
+    var h = Number(box && box.windowHeight) || 0;
+    if (!w) return;
+    var wide = w >= 700 || (w > h && w >= 560);
+    if (wide === this.data.wide) return;
+    this.setData({ wide: wide });
+    this.joyRect = null;
+    if (!this.modeLocked) this.setMode(wide ? 'gamepad' : 'dpad', false);
+    else this.measureJoystick();
   },
 
   appendLog: function (text, kind) {
@@ -101,6 +130,52 @@ Page({
     }]);
     if (logs.length > 100) logs.shift();
     this.setData({ logs: logs, logScrollTop: logs.length * 24 });
+  },
+
+  // ---------- 输入：只更新传入的一侧，另一侧保持不变 ----------
+  applyInputs: function (next) {
+    next = next || {};
+    if (next.steering !== undefined) this.steerVal = clamp(next.steering, MIN, MAX);
+    if (next.throttle !== undefined) this.throttleVal = clamp(next.throttle, MIN, MAX);
+    ble.setTargets(next);
+    // 读数与实际下发值一致：叠加微调与档位（BLE 层同样处理）
+    var steer = Math.round(clamp(this.steerVal + Number(this.data.trim), MIN, MAX));
+    var thr = Math.round(clamp(CENTER + (this.throttleVal - CENTER) * Number(this.data.gear), MIN, MAX));
+    var deg = Math.round((steer - CENTER) / (MAX - CENTER) * MAX_ANGLE);
+    this.setData({
+      steerReadout: steer,
+      throttleReadout: thr,
+      angleText: (deg > 0 ? '+' : '') + deg + '°',
+    });
+  },
+
+  // ---------- 模式切换 ----------
+  setMode: function (mode, fromUser) {
+    if (fromUser) this.modeLocked = true;
+    var dual = mode === 'gamepad';
+    this.stopGravity();
+    this.applyInputs({ steering: CENTER, throttle: CENTER });
+    this.setData({
+      mode: mode,
+      activeDir: '',
+      dirLabel: '',
+      joyX: 0,
+      joyY: 0,
+      tiltX: 0,
+      tiltY: 0,
+      idleDirText: dual ? '待命 · 按住前进 / 后退' : '待命 · 按住方向键',
+      idleJoyText: dual ? '待命 · 左右拖动转向' : '待命 · 按住摇杆拖动',
+      joyActiveText: dual ? '转向中 · 实时跟随' : '拖动中 · 实时跟随',
+    }, function () {
+      this.joyRect = null;
+      if (mode === 'joystick' || dual) this.measureJoystick();
+    }.bind(this));
+  },
+
+  onModeTap: function (e) {
+    var mode = e.currentTarget.dataset.mode;
+    if (mode === this.data.mode) return;
+    this.setMode(mode, true);
   },
 
   // ---------- 连接 ----------
@@ -137,7 +212,7 @@ Page({
 
   onDisconnected: function () {
     this.stopGravity();
-    ble.setTargets({ steering: CENTER, throttle: CENTER });
+    this.applyInputs({ steering: CENTER, throttle: CENTER });
     this.setData({
       connected: false,
       connecting: false,
@@ -145,32 +220,9 @@ Page({
       deviceName: '小米吉姆尼 · BLE',
       battery: '--%',
       activeDir: '',
-      steerReadout: CENTER,
-      throttleReadout: CENTER,
       joyX: 0,
       joyY: 0,
     });
-  },
-
-  // ---------- 模式切换 ----------
-  onModeTap: function (e) {
-    var mode = e.currentTarget.dataset.mode;
-    if (mode === this.data.mode) return;
-    this.stopGravity();
-    ble.setTargets({ steering: CENTER, throttle: CENTER });
-    this.setData({
-      mode: mode,
-      activeDir: '',
-      steerReadout: CENTER,
-      throttleReadout: CENTER,
-      joyX: 0,
-      joyY: 0,
-      tiltX: 0,
-      tiltY: 0,
-    }, function () {
-      // 摇杆面板渲染后再测量中心坐标
-      if (mode === 'joystick') this.measureJoystick();
-    }.bind(this));
   },
 
   // ---------- 通用：轻微震动反馈（真机有效，模拟器静默忽略）----------
@@ -188,6 +240,7 @@ Page({
       this._dirTimer = null;
     }
     var cmd = e.currentTarget.dataset.cmd;
+    var dual = this.data.mode === 'gamepad';
     var s = CENTER;
     var t = CENTER;
     if (cmd === 'forward') t = MAX;
@@ -195,20 +248,22 @@ Page({
     else if (cmd === 'left') s = MIN;
     else if (cmd === 'right') s = MAX;
     var label = DIR_LABEL[cmd] || cmd;
+    // 双手柄：左手只写油门，转向由右侧摇杆独占
+    if (dual) this.applyInputs({ throttle: t });
+    else this.applyInputs({ steering: s, throttle: t });
     if (this.data.connected) {
-      ble.setTargets({ steering: s, throttle: t });
-      this.appendLog(label + ' → 转向 ' + s + ' / 油门 ' + t, 'ok');
+      this.appendLog(label + ' → 油门 ' + t + (dual ? '（转向由摇杆控制）' : ' / 转向 ' + s), 'ok');
     } else {
       this.appendLog('演示：' + label + '（未连接小车，指令未下发）', 'warn');
     }
-    this.setData({ activeDir: cmd, dirLabel: label, steerReadout: s, throttleReadout: t });
+    this.setData({ activeDir: cmd, dirLabel: label });
     this.vibrate();
   },
 
   onDirEnd: function () {
-    // 指令与读数立即回中，按钮高亮延迟熄灭：鼠标快速单击也能看到明确的"按到了"反馈
-    ble.setTargets({ steering: CENTER, throttle: CENTER });
-    this.setData({ steerReadout: CENTER, throttleReadout: CENTER });
+    // 只回中自己这一侧；双区模式下另一侧（摇杆）指令保持不变
+    if (this.data.mode === 'gamepad') this.applyInputs({ throttle: CENTER });
+    else this.applyInputs({ steering: CENTER, throttle: CENTER });
     var that = this;
     if (this._dirTimer) clearTimeout(this._dirTimer);
     this._dirTimer = setTimeout(function () {
@@ -257,8 +312,9 @@ Page({
 
   onJoyEnd: function () {
     this.joyActive = false;
-    ble.setTargets({ steering: CENTER, throttle: CENTER });
-    this.setData({ joyX: 0, joyY: 0, steerReadout: CENTER, throttleReadout: CENTER });
+    if (this.data.mode === 'gamepad') this.applyInputs({ steering: CENTER });
+    else this.applyInputs({ steering: CENTER, throttle: CENTER });
+    this.setData({ joyX: 0, joyY: 0 });
     var that = this;
     if (this._joyTimer) clearTimeout(this._joyTimer);
     this._joyTimer = setTimeout(function () {
@@ -270,10 +326,12 @@ Page({
   updateJoy: function (touch) {
     var rect = this.joyRect;
     if (!rect || !touch) return;
+    var dual = this.data.mode === 'gamepad';
     var cx = rect.left + rect.width / 2;
     var cy = rect.top + rect.height / 2;
     var dx = touch.clientX - cx;
-    var dy = touch.clientY - cy;
+    // 双手柄：锁水平单轴，垂直位移不参与计算、knob 也不上下移动
+    var dy = dual ? 0 : (touch.clientY - cy);
     var max = rect.width / 2;
     var dist = Math.sqrt(dx * dx + dy * dy);
     if (dist > max) {
@@ -284,15 +342,9 @@ Page({
     var ny = clamp(dy / max, -1, 1);
     var steering = Math.round(CENTER + nx * (MAX - CENTER));
     var throttle = Math.round(CENTER - ny * (MAX - CENTER));
-    if (this.data.connected) {
-      ble.setTargets({ steering: steering, throttle: throttle });
-    }
-    this.setData({
-      joyX: dx,
-      joyY: dy,
-      steerReadout: steering,
-      throttleReadout: throttle,
-    });
+    if (dual) this.applyInputs({ steering: steering });
+    else this.applyInputs({ steering: steering, throttle: throttle });
+    this.setData({ joyX: dx, joyY: dy });
   },
 
   // ---------- 重力感应（加速度计）----------
@@ -345,12 +397,10 @@ Page({
     var sy = Math.abs(ny) < dead ? 0 : ny;
     var steering = Math.round(CENTER + sx * (MAX - CENTER));
     var throttle = Math.round(CENTER - sy * (MAX - CENTER));
-    ble.setTargets({ steering: steering, throttle: throttle });
+    this.applyInputs({ steering: steering, throttle: throttle });
     this.setData({
       tiltX: Math.round(clamp(dx * 80, -40, 40)),
       tiltY: Math.round(clamp(dy * 80, -40, 40)),
-      steerReadout: steering,
-      throttleReadout: throttle,
     });
   },
 
@@ -358,7 +408,7 @@ Page({
     if (!this.data.gravityRunning) return;
     wx.stopAccelerometer({});
     this.gravityBase = null;
-    ble.setTargets({ steering: CENTER, throttle: CENTER });
+    this.applyInputs({ steering: CENTER, throttle: CENTER });
     this.setData({
       gravityRunning: false,
       gravityCalibrated: false,
@@ -386,6 +436,7 @@ Page({
     var g = Number(e.currentTarget.dataset.gear);
     this.setData({ gear: g });
     ble.setTargets({ gear: g });
+    this.applyInputs({});
     this.appendLog('档位功率 ' + Math.round(g * 100) + '%');
   },
 
@@ -393,6 +444,7 @@ Page({
     var v = Number(e.detail.value);
     this.setData({ trim: v });
     ble.setTargets({ trim: v });
+    this.applyInputs({});
   },
 
   onBatteryTap: function () {
